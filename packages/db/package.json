@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "echo \"no unit tests in @rivocloud/db\"",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "postinstall": "node scripts/generate.cjs",
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
@@ -19,6 +20,7 @@
     "@prisma/client": "^5.20.0"
   },
   "devDependencies": {
+    "@types/node": "^20.16.11",
     "prisma": "^5.20.0",
     "typescript": "^5.6.2",
     "vitest": "^2.1.1"
