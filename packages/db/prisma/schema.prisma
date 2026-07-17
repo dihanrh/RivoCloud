@@ -1,0 +1,361 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Identity / Auth ─────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  passwordHash  String?  @map("password_hash")
+  name          String
+  avatarUrl     String?  @map("avatar_url")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  oauthAccounts           OAuthAccount[]
+  ownedOrganizations      Organization[]           @relation("OrgOwner")
+  organizationMemberships OrganizationMember[]     @relation("Member")
+  invitedMembers          OrganizationMember[]     @relation("InvitedBy")
+  apiKeys                 ApiKey[]
+  emailVerificationTokens EmailVerificationToken[]
+  cacheInvalidations      CacheInvalidation[]
+  auditLogs               AuditLog[]
+
+  @@map("users")
+}
+
+model OAuthAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  provider     String
+  providerId   String   @map("provider_id")
+  accessToken  String?  @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("oauth_accounts")
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  plan      String   @default("free")
+  ownerId   String   @map("owner_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner          User                 @relation("OrgOwner", fields: [ownerId], references: [id])
+  members        OrganizationMember[]
+  apiKeys        ApiKey[]
+  projects       Project[]
+  pullZones      PullZone[]
+  buckets        Bucket[]
+  billingAccount BillingAccount?
+  usageRecords   UsageRecord[]
+  invoices       Invoice[]
+  auditLogs      AuditLog[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id        String    @id @default(uuid()) @db.Uuid
+  orgId     String    @map("org_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  role      String    @default("developer")
+  invitedBy String?   @map("invited_by") @db.Uuid
+  joinedAt  DateTime? @map("joined_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation("Member", fields: [userId], references: [id], onDelete: Cascade)
+  inviter      User?        @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@unique([orgId, userId])
+  @@map("organization_members")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  permissions Json      @default("[]")
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id])
+  auditLogs    AuditLog[]
+
+  @@map("api_keys")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+// ── CDN ──────────────────────────────────────────────────────────
+
+model Project {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  name      String
+  slug      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  pullZones    PullZone[]
+  buckets      Bucket[]
+
+  @@unique([orgId, slug])
+  @@map("projects")
+}
+
+model PullZone {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  projectId      String?  @map("project_id") @db.Uuid
+  name           String
+  slug           String
+  originUrl      String   @map("origin_url")
+  originProtocol String   @default("https") @map("origin_protocol")
+  cacheTtl       Int      @default(3600) @map("cache_ttl")
+  browserTtl     Int      @default(0) @map("browser_ttl")
+  enabled        Boolean  @default(true)
+  signingSecret  String?  @map("signing_secret")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project            Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  domains            ZoneDomain[]
+  cacheRules         CacheRule[]
+  cacheInvalidations CacheInvalidation[]
+
+  @@unique([orgId, slug])
+  @@map("pull_zones")
+}
+
+model ZoneDomain {
+  id            String    @id @default(uuid()) @db.Uuid
+  zoneId        String    @map("zone_id") @db.Uuid
+  domain        String    @unique
+  sslStatus     String    @default("pending_dns") @map("ssl_status")
+  sslError      String?   @map("ssl_error")
+  certExpiresAt DateTime? @map("cert_expires_at") @db.Timestamptz
+  isPrimary     Boolean   @default(false) @map("is_primary")
+  verifiedAt    DateTime? @map("verified_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  zone PullZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@map("zone_domains")
+}
+
+model CacheRule {
+  id             String   @id @default(uuid()) @db.Uuid
+  zoneId         String   @map("zone_id") @db.Uuid
+  pattern        String
+  patternType    String   @default("glob") @map("pattern_type")
+  action         String   @default("cache")
+  edgeTtl        Int?     @map("edge_ttl")
+  browserTtl     Int?     @map("browser_ttl")
+  queryString    String   @default("strip_all") @map("query_string")
+  queryWhitelist String[] @map("query_whitelist")
+  priority       Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  zone PullZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@map("cache_rules")
+}
+
+model CacheInvalidation {
+  id            String    @id @default(uuid()) @db.Uuid
+  zoneId        String    @map("zone_id") @db.Uuid
+  createdBy     String?   @map("created_by") @db.Uuid
+  patterns      String[]
+  tags          String[]
+  status        String    @default("pending")
+  edgesNotified Int?      @map("edges_notified")
+  keysPurged    Int?      @map("keys_purged")
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  zone    PullZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  creator User?    @relation(fields: [createdBy], references: [id])
+
+  @@map("cache_invalidations")
+}
+
+// ── Storage ──────────────────────────────────────────────────────
+
+model Bucket {
+  id                String   @id @default(uuid()) @db.Uuid
+  orgId             String   @map("org_id") @db.Uuid
+  projectId         String?  @map("project_id") @db.Uuid
+  name              String
+  region            String   @default("eu-central")
+  versioningEnabled Boolean  @default(false) @map("versioning_enabled")
+  public            Boolean  @default(false)
+  lifecycleRules    Json     @default("[]") @map("lifecycle_rules")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization     Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project          Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  objects          StorageObject[]
+  multipartUploads MultipartUpload[]
+
+  @@unique([orgId, name])
+  @@map("buckets")
+}
+
+model StorageObject {
+  id          String    @id @default(uuid()) @db.Uuid
+  bucketId    String    @map("bucket_id") @db.Uuid
+  key         String
+  versionId   String    @default(uuid()) @map("version_id") @db.Uuid
+  isLatest    Boolean   @default(true) @map("is_latest")
+  size        BigInt?
+  contentType String    @default("application/octet-stream") @map("content_type")
+  etag        String?
+  storagePath String    @map("storage_path")
+  metadata    Json      @default("{}")
+  status      String    @default("pending")
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  bucket Bucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+
+  @@unique([bucketId, key, versionId])
+  @@index([bucketId, key], map: "idx_objects_bucket_key_latest")
+  @@index([expiresAt], map: "idx_objects_expires")
+  @@map("objects")
+}
+
+model MultipartUpload {
+  id            String   @id @default(uuid()) @db.Uuid
+  bucketId      String   @map("bucket_id") @db.Uuid
+  objectKey     String   @map("object_key")
+  minioUploadId String   @map("minio_upload_id")
+  parts         Json     @default("[]")
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  bucket Bucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+
+  @@map("multipart_uploads")
+}
+
+// ── Billing ──────────────────────────────────────────────────────
+
+model BillingAccount {
+  id               String    @id @default(uuid()) @db.Uuid
+  orgId            String    @unique @map("org_id") @db.Uuid
+  stripeCustomerId String?   @unique @map("stripe_customer_id")
+  stripeSubId      String?   @unique @map("stripe_sub_id")
+  plan             String    @default("free")
+  status           String    @default("active")
+  trialEndsAt      DateTime? @map("trial_ends_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("billing_accounts")
+}
+
+model UsageRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @map("org_id") @db.Uuid
+  periodStart    DateTime @map("period_start") @db.Date
+  periodEnd      DateTime @map("period_end") @db.Date
+  bandwidthBytes BigInt   @default(0) @map("bandwidth_bytes")
+  requests       BigInt   @default(0)
+  storageBytes   BigInt   @default(0) @map("storage_bytes")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, periodStart])
+  @@map("usage_records")
+}
+
+model Invoice {
+  id              String    @id @default(uuid()) @db.Uuid
+  orgId           String    @map("org_id") @db.Uuid
+  stripeInvoiceId String?   @unique @map("stripe_invoice_id")
+  amountCents     Int       @map("amount_cents")
+  currency        String    @default("usd")
+  status          String
+  periodStart     DateTime  @map("period_start") @db.Date
+  periodEnd       DateTime  @map("period_end") @db.Date
+  paidAt          DateTime? @map("paid_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("invoices")
+}
+
+// ── Audit + System ───────────────────────────────────────────────
+
+model AuditLog {
+  id           BigInt   @id @default(autoincrement())
+  orgId        String?  @map("org_id") @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  apiKeyId     String?  @map("api_key_id") @db.Uuid
+  action       String
+  resourceType String?  @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  ipAddress    String?  @map("ip_address") @db.Inet
+  userAgent    String?  @map("user_agent")
+  requestId    String?  @map("request_id")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  apiKey       ApiKey?       @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt], map: "idx_audit_logs_org_created")
+  @@map("audit_logs")
+}
+
+model JobRun {
+  id          String    @id @default(uuid()) @db.Uuid
+  jobName     String    @map("job_name")
+  status      String    @default("running")
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  error       String?
+  metadata    Json      @default("{}")
+
+  @@map("job_runs")
+}
