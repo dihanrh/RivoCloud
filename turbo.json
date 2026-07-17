@@ -15,7 +15,8 @@
       "outputs": []
     },
     "test:integration": {
-      "outputs": []
+      "outputs": [],
+      "env": ["DATABASE_URL"]
     },
     "dev": {
       "cache": false,
