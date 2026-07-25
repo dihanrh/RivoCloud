@@ -8,3 +8,4 @@ dist/
 packages/db/generated/
 packages/db/src/generated/
 coverage/
+doc*
