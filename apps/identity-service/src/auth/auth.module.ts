@@ -10,6 +10,6 @@ import { JwtOnlyGuard } from './jwt-only.guard.js';
   imports: [EventsModule],
   controllers: [AuthController],
   providers: [AuthService, tokenServiceProvider, JwtOnlyGuard],
-  exports: [TokenService, JwtOnlyGuard],
+  exports: [TokenService, JwtOnlyGuard, AuthService],
 })
 export class AuthModule {}

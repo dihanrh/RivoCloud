@@ -134,4 +134,16 @@ export class AuthService {
     await this.db.user.update({ where: { id: record.userId }, data: { passwordHash } });
     await this.db.passwordResetToken.delete({ where: { id: record.id } });
   }
+
+  async selectOrg(userId: string, orgId: string): Promise<AuthTokens> {
+    const membership = await this.db.organizationMember.findUnique({
+      where: { orgId_userId: { orgId, userId } },
+    });
+    if (!membership) {
+      throw new UnauthorizedException('Not a member of this organization');
+    }
+    const accessToken = await this.tokens.mintAccessToken({ sub: userId, org: orgId, role: membership.role });
+    const refreshToken = await this.tokens.mintRefreshToken(userId);
+    return { accessToken, refreshToken };
+  }
 }

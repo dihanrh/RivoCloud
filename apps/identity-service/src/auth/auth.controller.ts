@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -7,6 +7,9 @@ import { LogoutDto } from './dto/logout.dto.js';
 import { VerifyEmailDto } from './dto/verify-email.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
+import { SelectOrgDto } from './dto/select-org.dto.js';
+import { JwtOnlyGuard } from './jwt-only.guard.js';
+import { AuthCtx, type AuthContext } from './auth-context.decorator.js';
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -51,5 +54,11 @@ export class AuthController {
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.auth.resetPassword(dto.token, dto.newPassword);
     return { success: true };
+  }
+
+  @Post('select-org')
+  @UseGuards(JwtOnlyGuard)
+  async selectOrg(@AuthCtx() authCtx: AuthContext, @Body() dto: SelectOrgDto) {
+    return this.auth.selectOrg(authCtx.userId, dto.orgId);
   }
 }
