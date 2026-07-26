@@ -1,6 +1,6 @@
 # RivoCloud — Phase 1 Product Requirements Document (PRD)
 
-**Status:** Draft — Stage 1 (Infrastructure Foundation) complete, Stages 2–16 not started.
+**Status:** Draft — Stages 1-2 (Infrastructure Foundation, Identity Service) complete, Stages 3–16 not started.
 **Owner:** RivoCloud engineering.
 **Companion documents:**
 - [`2026-06-29-revocloud-master-architecture.md`](2026-06-29-revocloud-master-architecture.md) — product vision, long-term strategy, technology decisions (the "why" behind the whole product).
@@ -144,7 +144,7 @@ The 16-stage build order from the EDD (Section 11, Development Order), unchanged
 | # | Stage | Target Month | Status | Depends On | Concept Doc |
 |---|---|---|---|---|---|
 | 1 | Infrastructure Foundation — monorepo, Docker Compose, Prisma schema, CI | 1 | ✅ Done | — | [`docker-compose-and-infrastructure.md`](../../concepts/docker-compose-and-infrastructure.md) |
-| 2 | Identity Service — auth, orgs, API keys, auth guard | 1 | Not started | 1 | [`identity-service-and-auth.md`](../../concepts/identity-service-and-auth.md) |
+| 2 | Identity Service — auth, orgs, API keys, auth guard | 1 | ✅ Done | 1 | [`identity-service-and-auth.md`](../../concepts/identity-service-and-auth.md) |
 | 3 | Go Edge Proxy (Basic) — HTTP server, Redis (L2), in-process LRU (L1) | 2 | Not started | 1 | [`edge-proxy-and-caching.md`](../../concepts/edge-proxy-and-caching.md) |
 | 4 | CDN Service — zone CRUD, config publish to Redis | 2 | Not started | 2, 3 | [`cdn-zones-and-configuration.md`](../../concepts/cdn-zones-and-configuration.md) |
 | 5 | Storage Service — bucket CRUD, presigned upload, MinIO webhook | 3 | Not started | 2 | [`object-storage-and-uploads.md`](../../concepts/object-storage-and-uploads.md) |
