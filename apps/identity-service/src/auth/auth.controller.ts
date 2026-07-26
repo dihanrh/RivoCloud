@@ -4,6 +4,9 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { LogoutDto } from './dto/logout.dto.js';
+import { VerifyEmailDto } from './dto/verify-email.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -29,6 +32,24 @@ export class AuthController {
   async logout(@Body() dto: LogoutDto, @Headers('authorization') authorization?: string) {
     const accessToken = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : undefined;
     await this.auth.logout(dto.refreshToken, accessToken);
+    return { success: true };
+  }
+
+  @Post('verify-email')
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    await this.auth.verifyEmail(dto.token);
+    return { success: true };
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.auth.requestPasswordReset(dto.email);
+    return { success: true };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.auth.resetPassword(dto.token, dto.newPassword);
     return { success: true };
   }
 }
