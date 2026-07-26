@@ -6,9 +6,10 @@ import { HealthController } from './health/health.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { ApiKeysModule } from './api-keys/api-keys.module.js';
 
 @Module({
-  imports: [EnvModule, PrismaModule, RedisModule, AuthModule, UsersModule, OrganizationsModule],
+  imports: [EnvModule, PrismaModule, RedisModule, AuthModule, UsersModule, OrganizationsModule, ApiKeysModule],
   controllers: [HealthController],
 })
 export class AppModule {}
