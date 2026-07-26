@@ -7,9 +7,19 @@ import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
+import { InternalModule } from './internal/internal.module.js';
 
 @Module({
-  imports: [EnvModule, PrismaModule, RedisModule, AuthModule, UsersModule, OrganizationsModule, ApiKeysModule],
+  imports: [
+    EnvModule,
+    PrismaModule,
+    RedisModule,
+    AuthModule,
+    UsersModule,
+    OrganizationsModule,
+    ApiKeysModule,
+    InternalModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

@@ -2867,6 +2867,8 @@ git commit -m "feat: add identity-service API keys with role-capped permission s
 
 ### Task 7: Shared Auth Guard + internal endpoints
 
+**Revised while implementing:** the plan below originally called for swapping every business controller (Users, Organizations, API Keys) from `JwtOnlyGuard` to the combined `AuthGuard`. On implementation this was dropped: `AuthContext.userId` is non-null for JWT callers but nullable for API-key callers (an org-level key has no creating user), and none of the EDD's 9 API-key permission scopes (Section 8.2) actually cover managing users, organizations, or API keys themselves — there is no scope that would let a script call these endpoints in the first place. Widening `AuthContext` to accommodate API keys on routes no API key can legitimately reach was pure type-safety cost with no behavioral benefit. `JwtOnlyGuard` stays on those three controllers unchanged; `AuthGuard` is instead exercised by (a) the internal verify endpoints' dependencies and (b) a small ad-hoc `WhoAmIController` defined inline in `auth-guard.integration.test.ts`, which is the real, intended long-term use — future services (CDN, Storage) with actual scope-gated endpoints import `AuthGuard` for that purpose, not this stage's own controllers.
+
 **Files:**
 - Create: `apps/identity-service/src/auth/auth-guard.ts`
 - Create: `apps/identity-service/src/internal/internal-secret.guard.ts`

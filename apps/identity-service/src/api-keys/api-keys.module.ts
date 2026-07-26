@@ -1,10 +1,10 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ApiKeysController } from './api-keys.controller.js';
 import { ApiKeysService } from './api-keys.service.js';
 import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  imports: [AuthModule],
+  imports: [forwardRef(() => AuthModule)],
   controllers: [ApiKeysController],
   providers: [ApiKeysService],
   exports: [ApiKeysService],
