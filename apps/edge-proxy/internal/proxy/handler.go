@@ -64,7 +64,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	result, err := h.fetchOrigin(r, z, etag)
 	if err != nil {
 		if found && entry.UsableAsStale(now) {
-			writeEntry(w, r, entry, now, "STALE")
+			writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "STALE")
 			return
 		}
 		http.Error(w, "origin unreachable", http.StatusBadGateway)
@@ -125,6 +125,12 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, etag string
 	outReq.URL.Path = r.URL.Path
 	outReq.Host = target.Host
 	outReq.RequestURI = ""
+	// With no Accept-Encoding header at all, Go's http.Transport adds its
+	// own "Accept-Encoding: gzip" and transparently decompresses the
+	// response (stripping Content-Encoding/Content-Length before we ever
+	// see them) — forwarding the client's own header verbatim disables
+	// that and risks caching an already-compressed body as "identity".
+	outReq.Header.Del("Accept-Encoding")
 	if etag != "" {
 		outReq.Header.Set("If-None-Match", etag)
 	}
