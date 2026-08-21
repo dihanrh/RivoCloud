@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -20,6 +21,10 @@ func main() {
 	}
 
 	redisClient := mustConnectRedis()
+	memory, err := cachestore.NewMemory(l1MaxEntries())
+	if err != nil {
+		log.Fatalf("failed to create L1 cache: %v", err)
+	}
 
 	zones := zone.NewStaticRegistry([]zone.Config{
 		{
@@ -31,8 +36,11 @@ func main() {
 	})
 
 	handler := &proxy.CachingHandler{
-		Zones:  zones,
-		Layers: []cachestore.Layer{cachestore.NewRedis(redisClient, "edge-proxy:")},
+		Zones: zones,
+		Layers: []cachestore.Layer{
+			memory,
+			cachestore.NewRedis(redisClient, "edge-proxy:"),
+		},
 		Origin: http.DefaultClient,
 	}
 
@@ -51,6 +59,15 @@ func demoOriginURL() string {
 		return u
 	}
 	return "http://localhost:9999"
+}
+
+func l1MaxEntries() int {
+	if raw := os.Getenv("EDGE_PROXY_L1_MAX_ENTRIES"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 10_000
 }
 
 func mustConnectRedis() *redis.Client {
