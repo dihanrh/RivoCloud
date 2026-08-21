@@ -1,0 +1,12 @@
+{
+  "name": "@rivocloud/edge-proxy",
+  "private": true,
+  "scripts": {
+    "lint": "bash scripts/go-docker.sh sh -c \"gofmt -l . && go vet ./...\"",
+    "typecheck": "bash scripts/go-docker.sh go build -o /dev/null ./...",
+    "test:unit": "bash scripts/go-docker.sh go test ./...",
+    "test:integration": "bash scripts/go-docker.sh go test -tags=integration ./...",
+    "build": "bash scripts/go-docker.sh go build -o dist/edge-proxy ./cmd/edge-proxy",
+    "dev": "bash scripts/go-docker.sh go run ./cmd/edge-proxy"
+  }
+}
