@@ -11,6 +11,7 @@ import (
 
 	"rivocloud/edge-proxy/internal/cachekey"
 	"rivocloud/edge-proxy/internal/cachestore"
+	"rivocloud/edge-proxy/internal/compress"
 	"rivocloud/edge-proxy/internal/httpcache"
 	"rivocloud/edge-proxy/internal/zone"
 )
@@ -52,7 +53,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	entry, hitLayerIdx, found := h.lookup(r.Context(), key)
 	if found && entry.Fresh(now) {
 		h.populateFasterLayers(r.Context(), key, entry, hitLayerIdx)
-		writeEntry(w, r, entry, now, "HIT")
+		writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "HIT")
 		return
 	}
 
@@ -73,7 +74,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if result.notModified {
 		refreshed := refreshExpiry(entry, result.decision, now)
 		h.store(r.Context(), key, refreshed)
-		writeEntry(w, r, refreshed, now, "HIT")
+		writeEntry(w, r, h.negotiateEncoding(r, key, refreshed), now, "HIT")
 		return
 	}
 
@@ -87,7 +88,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if result.decision.Cacheable {
 		h.store(r.Context(), key, newEntry)
 	}
-	writeEntry(w, r, newEntry, now, "MISS")
+	writeEntry(w, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")
 }
 
 func (h *CachingHandler) proxyUncached(w http.ResponseWriter, r *http.Request, z zone.Config) {
@@ -237,4 +238,39 @@ func writeEntry(w http.ResponseWriter, r *http.Request, entry cachestore.Entry, 
 		return
 	}
 	w.Write(entry.Body)
+}
+
+func (h *CachingHandler) negotiateEncoding(r *http.Request, baseKey string, identity cachestore.Entry) cachestore.Entry {
+	if !identity.Cacheable {
+		return identity
+	}
+	if !compress.AcceptsGzip(r.Header.Get("Accept-Encoding")) {
+		return identity
+	}
+	if !compress.IsCompressible(identity.Header.Get("Content-Type")) {
+		return identity
+	}
+	return h.gzipVariant(r.Context(), baseKey, identity)
+}
+
+func (h *CachingHandler) gzipVariant(ctx context.Context, baseKey string, identity cachestore.Entry) cachestore.Entry {
+	gzKey := baseKey + ":gz"
+	if cached, _, ok := h.lookup(ctx, gzKey); ok && cached.Fresh(h.now()) {
+		return cached
+	}
+
+	compressed, err := compress.Gzip(identity.Body)
+	if err != nil {
+		log.Printf("gzip compress error: %v", err)
+		return identity
+	}
+
+	variant := identity
+	variant.Header = identity.Header.Clone()
+	variant.Header.Set("Content-Encoding", "gzip")
+	variant.Header.Set("Content-Length", strconv.Itoa(len(compressed)))
+	variant.Body = compressed
+
+	h.store(ctx, gzKey, variant)
+	return variant
 }
