@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -n "${CI:-}" ]; then
+  # GitHub Actions runners have a native Go toolchain (actions/setup-go) —
+  # skip Docker entirely there. The Docker wrapper below only exists to work
+  # around this dev machine having no native Go toolchain.
+  exec "$@"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$APP_DIR/../.." && pwd)"
