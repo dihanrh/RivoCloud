@@ -45,3 +45,19 @@ func TestNormalizeMethod_HeadFoldsToGet(t *testing.T) {
 		t.Fatalf("expected POST to pass through unchanged, got %s", got)
 	}
 }
+
+func TestBuild_MalformedQueryDoesNotCollideWithEmptyQuery(t *testing.T) {
+	noQuery := Build("zone1", "GET", "cdn.example.com", "/path", "")
+	malformedQuery := Build("zone1", "GET", "cdn.example.com", "/path", "q=50%off")
+	if noQuery == malformedQuery {
+		t.Fatal("expected a malformed query string to not collide with no query string at all")
+	}
+}
+
+func TestBuild_MalformedQueryIsDeterministic(t *testing.T) {
+	a := Build("zone1", "GET", "cdn.example.com", "/path", "q=50%off")
+	b := Build("zone1", "GET", "cdn.example.com", "/path", "q=50%off")
+	if a != b {
+		t.Fatal("expected the same malformed query string to produce the same key both times")
+	}
+}

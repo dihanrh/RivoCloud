@@ -51,8 +51,14 @@ func normalizePath(path string) string {
 }
 
 func normalizeQuery(rawQuery string) string {
+	if rawQuery == "" {
+		return ""
+	}
 	values, err := url.ParseQuery(rawQuery)
-	if err != nil || len(values) == 0 {
+	if err != nil {
+		return rawQuery
+	}
+	if len(values) == 0 {
 		return ""
 	}
 	keys := make([]string, 0, len(values))
