@@ -22,18 +22,26 @@ CONTAINER_REDIS_URL="$(rewrite_localhost "${REDIS_URL:-redis://localhost:6379}")
 CONTAINER_ORIGIN_URL="$(rewrite_localhost "${EDGE_PROXY_DEMO_ORIGIN_URL:-http://localhost:9999}")"
 CONTAINER_PORT="${EDGE_PROXY_PORT:-8888}"
 
-# -p publishes the proxy's own listen port so `go run`/`dev` are reachable
-# from the host during manual verification (Task 9); it's a harmless no-op
-# for commands that don't bind a port, like `go test`/`go build`/`go vet`.
-docker run --rm \
-  -p "${CONTAINER_PORT}:${CONTAINER_PORT}" \
-  -v "${WIN_REPO_ROOT}://workspace" \
-  -w "//workspace/apps/edge-proxy" \
-  -e CGO_ENABLED=0 \
-  -e GOFLAGS=-mod=mod \
-  -e REDIS_URL="${CONTAINER_REDIS_URL}" \
-  -e EDGE_PROXY_PORT="${CONTAINER_PORT}" \
-  -e EDGE_PROXY_DEMO_ORIGIN_URL="${CONTAINER_ORIGIN_URL}" \
-  -e EDGE_PROXY_L1_MAX_ENTRIES="${EDGE_PROXY_L1_MAX_ENTRIES:-}" \
-  golang:1.23-alpine \
-  "$@"
+DOCKER_ARGS=(
+  --rm
+  -v "${WIN_REPO_ROOT}://workspace"
+  -w "//workspace/apps/edge-proxy"
+  -e CGO_ENABLED=0
+  -e GOFLAGS=-mod=mod
+  -e REDIS_URL="${CONTAINER_REDIS_URL}"
+  -e EDGE_PROXY_PORT="${CONTAINER_PORT}"
+  -e EDGE_PROXY_DEMO_ORIGIN_URL="${CONTAINER_ORIGIN_URL}"
+  -e EDGE_PROXY_L1_MAX_ENTRIES="${EDGE_PROXY_L1_MAX_ENTRIES:-}"
+)
+
+# Only `go run` binds a port something outside the container needs to reach
+# (manual verification, Task 9) — publish it only then. Publishing
+# unconditionally would make concurrent `lint`/`typecheck`/`test:unit`
+# invocations (turbo may run a package's own tasks concurrently — none of
+# them declare a dependsOn ordering against each other) race for the same
+# host port and fail with "address already in use".
+if [ "${1:-}" = "go" ] && [ "${2:-}" = "run" ]; then
+  DOCKER_ARGS+=(-p "${CONTAINER_PORT}:${CONTAINER_PORT}")
+fi
+
+docker run "${DOCKER_ARGS[@]}" golang:1.23-alpine "$@"

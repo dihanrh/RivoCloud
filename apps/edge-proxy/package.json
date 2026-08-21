@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "lint": "bash scripts/go-docker.sh sh -c \"gofmt -l . && go vet ./...\"",
-    "typecheck": "bash scripts/go-docker.sh go build -o /dev/null ./...",
+    "typecheck": "bash scripts/go-docker.sh go build -o /tmp/edge-proxy-typecheck/ ./...",
     "test:unit": "bash scripts/go-docker.sh go test ./...",
     "test:integration": "bash scripts/go-docker.sh go test -tags=integration ./...",
     "build": "bash scripts/go-docker.sh go build -o dist/edge-proxy ./cmd/edge-proxy",
