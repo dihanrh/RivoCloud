@@ -95,6 +95,9 @@ func parseCacheControl(raw string) cacheControl {
 			cc.noCache = true
 		case strings.HasPrefix(lower, "max-age="):
 			if secs, err := strconv.Atoi(part[len("max-age="):]); err == nil {
+				if secs < 0 {
+					secs = 0
+				}
 				cc.maxAge = time.Duration(secs) * time.Second
 			}
 		case strings.HasPrefix(lower, "stale-if-error="):

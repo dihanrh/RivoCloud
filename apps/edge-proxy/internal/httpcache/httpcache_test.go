@@ -84,3 +84,16 @@ func TestBrowserCacheControl_CacheableUsesRemainingTTL(t *testing.T) {
 		t.Fatalf("expected public max-age=42, got %q", got)
 	}
 }
+
+func TestDecide_NegativeMaxAgeClampsToZeroInsteadOfFallingThrough(t *testing.T) {
+	d := decideAt(t, map[string]string{
+		"Cache-Control": "max-age=-30",
+		"Expires":       "Thu, 01 Jan 2026 01:00:00 GMT",
+	}, time.Hour)
+	if !d.Cacheable {
+		t.Fatal("expected a negative max-age to still be cacheable (Priority 2 applies, just clamped)")
+	}
+	if d.TTL != 0 {
+		t.Fatalf("expected a negative max-age to clamp to TTL 0, got %s (did it fall through to the Expires header instead?)", d.TTL)
+	}
+}
