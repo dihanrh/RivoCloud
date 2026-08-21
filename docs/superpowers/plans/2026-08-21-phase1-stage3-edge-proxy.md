@@ -1468,6 +1468,15 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, etag string
 	outReq.URL.Path = r.URL.Path
 	outReq.Host = target.Host
 	outReq.RequestURI = ""
+	// The client's own Accept-Encoding must never reach the origin: with no
+	// Accept-Encoding header at all, Go's http.Transport adds its own
+	// "Accept-Encoding: gzip" and transparently decompresses the response
+	// (stripping Content-Encoding/Content-Length before we ever see them).
+	// Forwarding the client's header verbatim disables that transparent
+	// decompression — a gzip-aware origin would then hand back a real
+	// gzip body that gets cached as "identity" and re-gzipped by Task 7's
+	// negotiateEncoding, corrupting it for every client that requests it.
+	outReq.Header.Del("Accept-Encoding")
 	if etag != "" {
 		outReq.Header.Set("If-None-Match", etag)
 	}
@@ -1541,6 +1550,7 @@ func buildEntry(resp *http.Response, body []byte, decision httpcache.Decision, n
 	header.Del("Content-Length")
 	header.Del("Connection")
 	header.Del("Transfer-Encoding")
+	header.Del("Set-Cookie")
 	header.Set("Content-Length", strconv.Itoa(len(body)))
 
 	return cachestore.Entry{
@@ -2266,7 +2276,7 @@ Expected: FAIL — no `Content-Encoding` header is ever set yet (gzip negotiatio
 
 - [ ] **Step 7: Add gzip negotiation to the handler**
 
-In `apps/edge-proxy/internal/proxy/handler.go`, add `"rivocloud/edge-proxy/internal/compress"` to the imports, and insert the negotiation step into `ServeHTTP` right before each of its three `writeEntry(...)` calls that serve a GET/HEAD response (the `found && entry.Fresh(now)` branch, the `result.notModified` branch, and the final fresh-fetch branch) — replace each of those three blocks' entry variable with the negotiated one. Concretely, change:
+In `apps/edge-proxy/internal/proxy/handler.go`, add `"rivocloud/edge-proxy/internal/compress"` to the imports, and insert the negotiation step into `ServeHTTP` right before each of its FOUR `writeEntry(...)` calls that serve a GET/HEAD response (the `found && entry.Fresh(now)` branch, the STALE-on-origin-failure branch, the `result.notModified` branch, and the final fresh-fetch branch) — replace each of those four blocks' entry variable with the negotiated one. A client that asked for gzip should get gzip on a stale-served response too, not just on a normal hit/miss — otherwise the encoding of what's served becomes inconsistent depending on whether the origin happened to be reachable. Concretely, change:
 
 ```go
 	if found && entry.Fresh(now) {
@@ -2284,6 +2294,24 @@ to:
 		writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "HIT")
 		return
 	}
+```
+
+change:
+
+```go
+		if found && entry.UsableAsStale(now) {
+			writeEntry(w, r, entry, now, "STALE")
+			return
+		}
+```
+
+to:
+
+```go
+		if found && entry.UsableAsStale(now) {
+			writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "STALE")
+			return
+		}
 ```
 
 change:
@@ -2326,6 +2354,40 @@ to:
 		h.store(r.Context(), key, newEntry)
 	}
 	writeEntry(w, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")
+```
+
+Also change `fetchOrigin` — the client's own `Accept-Encoding` header must never reach the origin unmodified, or a gzip-aware origin could hand back an already-gzip-compressed body that `negotiateEncoding` would then compress a second time, corrupting it for every client that requests it. Change:
+
+```go
+	outReq := r.Clone(r.Context())
+	outReq.URL.Scheme = target.Scheme
+	outReq.URL.Host = target.Host
+	outReq.URL.Path = r.URL.Path
+	outReq.Host = target.Host
+	outReq.RequestURI = ""
+	if etag != "" {
+		outReq.Header.Set("If-None-Match", etag)
+	}
+```
+
+to:
+
+```go
+	outReq := r.Clone(r.Context())
+	outReq.URL.Scheme = target.Scheme
+	outReq.URL.Host = target.Host
+	outReq.URL.Path = r.URL.Path
+	outReq.Host = target.Host
+	outReq.RequestURI = ""
+	// With no Accept-Encoding header at all, Go's http.Transport adds its
+	// own "Accept-Encoding: gzip" and transparently decompresses the
+	// response (stripping Content-Encoding/Content-Length before we ever
+	// see them) — forwarding the client's own header verbatim disables
+	// that and risks caching an already-compressed body as "identity".
+	outReq.Header.Del("Accept-Encoding")
+	if etag != "" {
+		outReq.Header.Set("If-None-Match", etag)
+	}
 ```
 
 Then add these two functions at the bottom of the file:
