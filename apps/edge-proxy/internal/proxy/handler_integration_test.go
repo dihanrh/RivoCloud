@@ -77,3 +77,24 @@ func TestCachingHandler_NonGetMethodIsProxiedUncached(t *testing.T) {
 		t.Fatalf("expected 201 relayed from origin, got %d", rec.Code)
 	}
 }
+
+func TestCachingHandler_StripsSetCookieFromCachedEntry(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Set-Cookie", "session=super-secret-value; HttpOnly")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("body"))
+	}))
+	defer origin.Close()
+
+	zones := zone.NewStaticRegistry([]zone.Config{{ID: "z1", Host: "demo.test", OriginURL: origin.URL}})
+	h := &CachingHandler{Zones: zones, Origin: http.DefaultClient}
+
+	req := httptest.NewRequest("GET", "http://demo.test/page", nil)
+	req.Host = "demo.test"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Set-Cookie"); got != "" {
+		t.Fatalf("expected Set-Cookie to never be relayed through the cache pipeline, got %q", got)
+	}
+}

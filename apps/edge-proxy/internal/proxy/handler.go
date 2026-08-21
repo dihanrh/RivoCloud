@@ -197,6 +197,7 @@ func buildEntry(resp *http.Response, body []byte, decision httpcache.Decision, n
 	header.Del("Content-Length")
 	header.Del("Connection")
 	header.Del("Transfer-Encoding")
+	header.Del("Set-Cookie")
 	header.Set("Content-Length", strconv.Itoa(len(body)))
 
 	return cachestore.Entry{
