@@ -61,7 +61,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if found {
 		etag = entry.ETag
 	}
-	result, err := h.fetchOrigin(r, z, etag)
+	result, err := h.fetchOrigin(r, z, originRequest{ifNoneMatch: etag, ownsRevalidation: true})
 	if err != nil {
 		if found && entry.UsableAsStale(now) {
 			writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "STALE")
@@ -72,8 +72,20 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.notModified {
+		if !found {
+			// Unreachable once the client's own conditional headers are
+			// stripped above: the edge only sends If-None-Match when it has
+			// something to revalidate. Refreshing/serving the zero-valued
+			// entry here would emit WriteHeader(0) and panic, so fail loudly
+			// instead.
+			log.Printf("origin returned 304 with nothing cached for key %s", key)
+			http.Error(w, "unexpected origin 304", http.StatusBadGateway)
+			return
+		}
 		refreshed := refreshExpiry(entry, result.decision, now)
-		h.store(r.Context(), key, refreshed)
+		if result.decision.Cacheable {
+			h.store(r.Context(), key, refreshed)
+		}
 		writeEntry(w, r, h.negotiateEncoding(r, key, refreshed), now, "HIT")
 		return
 	}
@@ -92,7 +104,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CachingHandler) proxyUncached(w http.ResponseWriter, r *http.Request, z zone.Config) {
-	result, err := h.fetchOrigin(r, z, "")
+	result, err := h.fetchOrigin(r, z, originRequest{})
 	if err != nil {
 		http.Error(w, "origin unreachable", http.StatusBadGateway)
 		return
@@ -113,7 +125,33 @@ type originResult struct {
 	decision    httpcache.Decision
 }
 
-func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, etag string) (*originResult, error) {
+// conditionalRequestHeaders are the client's own precondition headers. On the
+// caching path they must never reach the origin: the edge, not the client,
+// owns revalidation there, and a client-triggered 304 would leave the handler
+// with no representation to serve (RFC 9111 §4.3.1).
+var conditionalRequestHeaders = []string{
+	"If-None-Match",
+	"If-Modified-Since",
+	"If-Match",
+	"If-Unmodified-Since",
+	"If-Range",
+}
+
+// originRequest describes how the edge should talk to the origin for one
+// client request.
+type originRequest struct {
+	// ifNoneMatch is the edge's OWN cached ETag, empty when it has none.
+	ifNoneMatch string
+	// ownsRevalidation is true on the caching path, where the edge issues
+	// its own conditional request and so must strip the client's. It stays
+	// false on the uncached passthrough path, where the client's
+	// preconditions are part of the semantics being proxied (an If-Match on
+	// a PUT, an If-Range on a Range request) and stripping them would be a
+	// correctness bug in its own right.
+	ownsRevalidation bool
+}
+
+func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec originRequest) (*originResult, error) {
 	target, err := url.Parse(z.OriginURL)
 	if err != nil {
 		return nil, err
@@ -125,14 +163,19 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, etag string
 	outReq.URL.Path = r.URL.Path
 	outReq.Host = target.Host
 	outReq.RequestURI = ""
+	if spec.ownsRevalidation {
+		for _, name := range conditionalRequestHeaders {
+			outReq.Header.Del(name)
+		}
+	}
 	// With no Accept-Encoding header at all, Go's http.Transport adds its
 	// own "Accept-Encoding: gzip" and transparently decompresses the
 	// response (stripping Content-Encoding/Content-Length before we ever
 	// see them) — forwarding the client's own header verbatim disables
 	// that and risks caching an already-compressed body as "identity".
 	outReq.Header.Del("Accept-Encoding")
-	if etag != "" {
-		outReq.Header.Set("If-None-Match", etag)
+	if spec.ifNoneMatch != "" {
+		outReq.Header.Set("If-None-Match", spec.ifNoneMatch)
 	}
 
 	resp, err := h.Origin.Do(outReq)
