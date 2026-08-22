@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/edge-proxy/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo lint typecheck
 
@@ -31,6 +35,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/edge-proxy/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo test:unit
 
@@ -77,6 +85,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/edge-proxy/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @rivocloud/db exec prisma migrate deploy
       - run: node apps/identity-service/scripts/generate-jwt-keys.cjs
@@ -93,7 +105,25 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/edge-proxy/go.sum
       - run: pnpm install --frozen-lockfile
       - name: pnpm audit
         run: pnpm audit --audit-level=high
+        continue-on-error: true
+      # Go dependencies were outside all vulnerability scanning: pnpm audit
+      # cannot see apps/edge-proxy's go.mod. Pinned to v1.1.4 rather than
+      # @latest because golang.org/x/vuln now requires Go >= 1.25 while this
+      # repo pins 1.23.
+      #
+      # continue-on-error matches the pnpm audit step above, and is required
+      # today: all 27 findings it reports are in the Go 1.23 standard library
+      # (fixed in go1.25.x), not in apps/edge-proxy's own dependencies, which
+      # are clean. Bumping the pinned Go toolchain would let this become a
+      # hard gate.
+      - name: govulncheck (Go modules)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        working-directory: apps/edge-proxy
         continue-on-error: true

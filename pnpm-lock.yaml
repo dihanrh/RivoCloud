@@ -24,6 +24,8 @@ importers:
         specifier: ^8.7.0
         version: 8.64.0(eslint@9.39.5)(typescript@5.9.3)
 
+  apps/edge-proxy: {}
+
   apps/identity-service:
     dependencies:
       '@nestjs/common':
