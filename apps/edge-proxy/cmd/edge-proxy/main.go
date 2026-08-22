@@ -41,7 +41,7 @@ func main() {
 			memory,
 			cachestore.NewRedis(redisClient, "edge-proxy:"),
 		},
-		Origin: http.DefaultClient,
+		Origin: newOriginClient(),
 	}
 
 	mux := http.NewServeMux()
@@ -49,8 +49,29 @@ func main() {
 	mux.Handle("/", handler)
 
 	log.Printf("edge-proxy listening on :%s (demo zone origin: %s)", port, demoOriginURL())
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := newServer(port, mux).ListenAndServe(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// newOriginClient is the edge's own origin-fetch client. http.DefaultClient
+// has no timeout at all, so a hung origin would pin the request goroutine and
+// its connection indefinitely.
+func newOriginClient() *http.Client {
+	return &http.Client{Timeout: 10 * time.Second}
+}
+
+// newServer applies listener-side deadlines. http.ListenAndServe's implicit
+// server has none, leaving the proxy open to slow-loris clients and to
+// connections that never make progress.
+func newServer(port string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 }
 
