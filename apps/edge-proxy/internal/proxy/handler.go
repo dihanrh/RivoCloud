@@ -47,6 +47,14 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A Range request bypasses the cache in both directions. The cache key
+	// carries no range, so serving a stored full body would answer the wrong
+	// bytes and storing a 206 would poison the full-body entry.
+	if r.Header.Get("Range") != "" {
+		h.proxyUncached(w, r, z)
+		return
+	}
+
 	key := cachekey.Build(z.ID, cachekey.NormalizeMethod(r.Method), r.Host, r.URL.Path, r.URL.RawQuery)
 	now := h.now()
 
@@ -204,6 +212,14 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 	}
 
 	decision := httpcache.Decide(resp.Header, z.DefaultTTL, h.now())
+	// Decide only reads freshness directives. Storable applies the gates that
+	// no Cache-Control can override — status code, an unhonorable Vary, and
+	// an authenticated request without an explicit "public". Zeroing the
+	// whole Decision (rather than only its Cacheable flag) also makes
+	// writeEntry advertise no-store to the client.
+	if decision.Cacheable && !httpcache.Storable(resp.StatusCode, resp.Header, r.Header.Get("Authorization") != "") {
+		decision = httpcache.Decision{Cacheable: false}
+	}
 	return &originResult{response: resp, decision: decision}, nil
 }
 
@@ -291,7 +307,13 @@ func writeEntry(w http.ResponseWriter, r *http.Request, entry cachestore.Entry, 
 	}
 	remaining := entry.ExpiresAt.Sub(now)
 	w.Header().Set("Cache-Control", httpcache.BrowserCacheControl(httpcache.Decision{Cacheable: entry.Cacheable}, remaining))
-	w.Header().Set("Vary", "Accept-Encoding")
+	// Announce the edge's own encoding negotiation, but never at the cost of
+	// the origin's Vary: a response varying by anything else is relayed with
+	// that Vary intact (and is non-cacheable, per httpcache.Storable), so
+	// downstream caches don't inherit a claim the origin never made.
+	if httpcache.VaryOnlyAcceptEncoding(entry.Header.Get("Vary")) {
+		w.Header().Set("Vary", "Accept-Encoding")
+	}
 	w.Header().Set("X-RivoCloud-Cache", source)
 	if entry.ETag != "" {
 		w.Header().Set("ETag", entry.ETag)
