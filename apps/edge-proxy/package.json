@@ -2,7 +2,7 @@
   "name": "@rivocloud/edge-proxy",
   "private": true,
   "scripts": {
-    "lint": "bash scripts/go-docker.sh sh -c \"gofmt -l . && go vet ./...\"",
+    "lint": "bash scripts/go-docker.sh sh -c \"gofmt -l . | grep . && exit 1; go vet ./...\"",
     "typecheck": "bash scripts/go-docker.sh go build -o /tmp/edge-proxy-typecheck/ ./...",
     "test:unit": "bash scripts/go-docker.sh go test ./...",
     "test:integration": "bash scripts/go-docker.sh go test -tags=integration ./...",
