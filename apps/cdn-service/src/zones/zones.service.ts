@@ -3,12 +3,16 @@ import type { PrismaClient, PullZone } from '@rivocloud/db';
 import { PRISMA } from '../prisma/prisma.module.js';
 import { slugify } from './slug.util.js';
 import { toZoneResponse } from './zone-response.util.js';
+import { ZoneConfigPublisher } from './zone-config.publisher.js';
 import type { CreateZoneDto } from './dto/create-zone.dto.js';
 import type { UpdateZoneDto } from './dto/update-zone.dto.js';
 
 @Injectable()
 export class ZonesService {
-  constructor(@Inject(PRISMA) private readonly db: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA) private readonly db: PrismaClient,
+    private readonly publisher: ZoneConfigPublisher,
+  ) {}
 
   async create(orgId: string, dto: CreateZoneDto) {
     const slug = await this.uniqueSlug(orgId, dto.name);
@@ -23,6 +27,7 @@ export class ZonesService {
         browserTtl: dto.browserTtl ?? 0,
       },
     });
+    await this.publisher.publish(zone);
     return toZoneResponse(zone);
   }
 
@@ -51,12 +56,14 @@ export class ZonesService {
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
       },
     });
+    await this.publisher.publish(zone);
     return toZoneResponse(zone);
   }
 
   async remove(orgId: string, zoneId: string): Promise<void> {
-    await this.findOwned(orgId, zoneId);
+    const zone = await this.findOwned(orgId, zoneId);
     await this.db.pullZone.delete({ where: { id: zoneId } });
+    await this.publisher.unpublish(zone);
   }
 
   private async findOwned(orgId: string, zoneId: string): Promise<PullZone> {

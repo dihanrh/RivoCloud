@@ -1,8 +1,16 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
+import { Redis } from 'ioredis';
 import { prisma } from '@rivocloud/db';
+import { EventsService } from '../events/events.service.js';
 import { ZonesService } from './zones.service.js';
+import { ZoneConfigPublisher } from './zone-config.publisher.js';
+import type { AppEnv } from '../env.js';
+
+const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
+const publisher = new ZoneConfigPublisher(redis, { CDN_ROOT_DOMAIN: 'cdn.rivocloud.dev' } as AppEnv, events);
 
 async function seedOrg() {
   const user = await prisma.user.create({ data: { email: `${randomUUID()}@example.com`, name: 'Zone Owner' } });
@@ -10,7 +18,7 @@ async function seedOrg() {
 }
 
 describe('ZonesService', () => {
-  const service = new ZonesService(prisma);
+  const service = new ZonesService(prisma, publisher);
 
   beforeEach(async () => {
     await prisma.pullZone.deleteMany();
