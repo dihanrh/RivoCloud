@@ -54,6 +54,36 @@ func TestBuild_MalformedQueryDoesNotCollideWithEmptyQuery(t *testing.T) {
 	}
 }
 
+func TestBuild_PercentEncodedSeparatorDoesNotCollideWithRealSeparator(t *testing.T) {
+	// "?a=b%26c%3Dd" is ONE param whose value is literally "b&c=d";
+	// "?a=b&c=d" is TWO params. The raw query is forwarded to the origin
+	// unchanged, so the origin legitimately returns different content for
+	// each — they must never share a cache key.
+	escaped := Build("zone1", "GET", "cdn.example.com", "/p", "a=b%26c%3Dd")
+	unescaped := Build("zone1", "GET", "cdn.example.com", "/p", "a=b&c=d")
+	if escaped == unescaped {
+		t.Fatal("expected a percent-encoded separator inside a value to produce a different key than a real separator")
+	}
+}
+
+func TestBuild_PercentEncodedValueIsDeterministic(t *testing.T) {
+	a := Build("zone1", "GET", "cdn.example.com", "/p", "a=b%26c%3Dd")
+	b := Build("zone1", "GET", "cdn.example.com", "/p", "a=b%26c%3Dd")
+	if a != b {
+		t.Fatal("expected the same percent-encoded query to produce the same key both times")
+	}
+}
+
+func TestBuild_EquivalentEncodingsOfTheSameValueShareAKey(t *testing.T) {
+	// "%2F" and "/" both decode to "/", so these are the same request and
+	// should share one cache entry — re-escaping canonicalizes them.
+	a := Build("zone1", "GET", "cdn.example.com", "/p", "path=%2Fx")
+	b := Build("zone1", "GET", "cdn.example.com", "/p", "path=/x")
+	if a != b {
+		t.Fatal("expected equivalent encodings of the same value to share a cache key")
+	}
+}
+
 func TestBuild_MalformedQueryIsDeterministic(t *testing.T) {
 	a := Build("zone1", "GET", "cdn.example.com", "/path", "q=50%off")
 	b := Build("zone1", "GET", "cdn.example.com", "/path", "q=50%off")

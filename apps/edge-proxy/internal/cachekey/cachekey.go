@@ -67,20 +67,20 @@ func normalizeQuery(rawQuery string) string {
 	}
 	sort.Strings(keys)
 
-	var b strings.Builder
-	first := true
+	// Emit each pair RE-ESCAPED, never the decoded Go string. Writing back
+	// decoded values would collapse "?a=b%26c%3Dd" (one param whose value is
+	// literally "b&c=d") onto "?a=b&c=d" (two params) — the origin still
+	// receives the raw query and returns different content for each, so a
+	// shared key would serve one request's body for the other's. Because
+	// url.QueryEscape never emits a bare '&' or '=', the joined form uniquely
+	// determines the pairs it was built from.
+	pairs := make([]string, 0, len(values))
 	for _, k := range keys {
 		vs := append([]string{}, values[k]...)
 		sort.Strings(vs)
 		for _, v := range vs {
-			if !first {
-				b.WriteByte('&')
-			}
-			first = false
-			b.WriteString(k)
-			b.WriteByte('=')
-			b.WriteString(v)
+			pairs = append(pairs, url.QueryEscape(k)+"="+url.QueryEscape(v))
 		}
 	}
-	return b.String()
+	return strings.Join(pairs, "&")
 }
