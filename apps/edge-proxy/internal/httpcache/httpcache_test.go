@@ -71,6 +71,75 @@ func TestDecide_OriginStaleIfErrorOverridesDefault(t *testing.T) {
 	}
 }
 
+func TestStorable_OnlyHeuristicallyCacheableStatusCodes(t *testing.T) {
+	// RFC 9111 §4.2.2's heuristically-cacheable set.
+	allowed := []int{200, 203, 204, 300, 301, 308, 404, 405, 410, 414, 501}
+	for _, code := range allowed {
+		if !Storable(code, http.Header{}, false) {
+			t.Errorf("expected status %d to be storable", code)
+		}
+	}
+	for _, code := range []int{201, 202, 206, 302, 303, 307, 400, 401, 403, 429, 500, 502, 503, 504} {
+		if Storable(code, http.Header{}, false) {
+			t.Errorf("expected status %d to never be storable", code)
+		}
+	}
+}
+
+func TestStorable_ForbiddenStatusIsNotStorableEvenWithLongMaxAge(t *testing.T) {
+	h := http.Header{}
+	h.Set("Cache-Control", "public, max-age=31536000")
+	if Storable(http.StatusInternalServerError, h, false) {
+		t.Fatal("expected a 500 to be non-storable no matter what its Cache-Control says")
+	}
+}
+
+func TestStorable_VaryOnAnythingButAcceptEncodingIsNotStorable(t *testing.T) {
+	for _, vary := range []string{"Cookie", "Accept-Encoding, Cookie", "*", "User-Agent"} {
+		h := http.Header{}
+		h.Set("Vary", vary)
+		if Storable(http.StatusOK, h, false) {
+			t.Errorf("expected Vary: %q to make a response non-storable (the edge can only vary by encoding)", vary)
+		}
+	}
+	for _, vary := range []string{"", "Accept-Encoding", "accept-encoding", " Accept-Encoding , accept-encoding "} {
+		h := http.Header{}
+		if vary != "" {
+			h.Set("Vary", vary)
+		}
+		if !Storable(http.StatusOK, h, false) {
+			t.Errorf("expected Vary: %q to remain storable", vary)
+		}
+	}
+}
+
+func TestStorable_AuthenticatedRequestNeedsExplicitPublic(t *testing.T) {
+	plain := http.Header{}
+	plain.Set("Cache-Control", "max-age=600")
+	if Storable(http.StatusOK, plain, true) {
+		t.Fatal("expected a response to an Authorization-bearing request to be non-storable without an explicit public (RFC 9111 §3.5)")
+	}
+
+	pub := http.Header{}
+	pub.Set("Cache-Control", "public, max-age=600")
+	if !Storable(http.StatusOK, pub, true) {
+		t.Fatal("expected an explicitly public response to stay storable even for an authenticated request")
+	}
+}
+
+func TestVaryOnlyAcceptEncoding(t *testing.T) {
+	for _, raw := range []string{"", "Accept-Encoding", "ACCEPT-ENCODING", "Accept-Encoding, Accept-Encoding"} {
+		if !VaryOnlyAcceptEncoding(raw) {
+			t.Errorf("expected %q to count as Accept-Encoding-only", raw)
+		}
+	}
+	for _, raw := range []string{"Cookie", "*", "Accept-Encoding, Cookie"} {
+		if VaryOnlyAcceptEncoding(raw) {
+			t.Errorf("expected %q to NOT count as Accept-Encoding-only", raw)
+		}
+	}
+}
+
 func TestBrowserCacheControl_NonCacheableIsNoStore(t *testing.T) {
 	got := BrowserCacheControl(Decision{Cacheable: false}, 0)
 	if got != "no-store" {

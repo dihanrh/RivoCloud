@@ -60,6 +60,63 @@ func Decide(header http.Header, zoneDefaultTTL time.Duration, now time.Time) Dec
 	return Decision{Cacheable: true, TTL: zoneDefaultTTL, StaleIfErrorTTL: staleIfError}
 }
 
+// storableStatusCodes is RFC 9111 §4.2.2's heuristically-cacheable set. A
+// status outside it is never stored, however generous its Cache-Control:
+// caching a 500 or a 302 under a plain URL key would pin an error or a
+// one-shot redirect across every visitor.
+var storableStatusCodes = map[int]bool{
+	http.StatusOK:                   true, // 200
+	http.StatusNonAuthoritativeInfo: true, // 203
+	http.StatusNoContent:            true, // 204
+	http.StatusMultipleChoices:      true, // 300
+	http.StatusMovedPermanently:     true, // 301
+	http.StatusPermanentRedirect:    true, // 308
+	http.StatusNotFound:             true, // 404
+	http.StatusMethodNotAllowed:     true, // 405
+	http.StatusGone:                 true, // 410
+	http.StatusRequestURITooLong:    true, // 414
+	http.StatusNotImplemented:       true, // 501
+}
+
+// Storable reports whether a shared cache may store this response AT ALL,
+// separately from how long Decide says it stays fresh. Three gates:
+//
+//   - the status code must be heuristically cacheable (RFC 9111 §4.2.2);
+//   - the response must not Vary by anything but Accept-Encoding — the edge
+//     keys only an identity and a gzip variant, so a Vary it cannot honor
+//     would have it serve one client's representation to another;
+//   - a response to a request carrying Authorization needs the origin to say
+//     "public" explicitly, or it would be replayed to anonymous clients
+//     (RFC 9111 §3.5).
+func Storable(statusCode int, respHeader http.Header, requestAuthenticated bool) bool {
+	if !storableStatusCodes[statusCode] {
+		return false
+	}
+	if !VaryOnlyAcceptEncoding(respHeader.Get("Vary")) {
+		return false
+	}
+	if requestAuthenticated && !parseCacheControl(respHeader.Get("Cache-Control")).public {
+		return false
+	}
+	return true
+}
+
+// VaryOnlyAcceptEncoding reports whether a Vary header value names nothing
+// beyond Accept-Encoding — the one dimension this edge can actually vary by.
+// An absent (empty) Vary qualifies; "*" never does.
+func VaryOnlyAcceptEncoding(raw string) bool {
+	for _, field := range strings.Split(raw, ",") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		if !strings.EqualFold(field, "Accept-Encoding") {
+			return false
+		}
+	}
+	return true
+}
+
 // BrowserCacheControl builds the Cache-Control header sent to the visitor's
 // browser, independent of how long the edge itself caches the object (EDD
 // Section 5.3, "Browser TTL vs Edge TTL").
@@ -76,6 +133,7 @@ func BrowserCacheControl(d Decision, remaining time.Duration) string {
 type cacheControl struct {
 	noStore      bool
 	private      bool
+	public       bool
 	noCache      bool
 	maxAge       time.Duration
 	staleIfError time.Duration
@@ -91,6 +149,8 @@ func parseCacheControl(raw string) cacheControl {
 			cc.noStore = true
 		case lower == "private":
 			cc.private = true
+		case lower == "public":
+			cc.public = true
 		case lower == "no-cache":
 			cc.noCache = true
 		case strings.HasPrefix(lower, "max-age="):
