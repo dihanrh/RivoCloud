@@ -61,7 +61,11 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if found {
 		etag = entry.ETag
 	}
-	result, err := h.fetchOrigin(r, z, originRequest{ifNoneMatch: etag, ownsRevalidation: true})
+	result, err := h.fetchOrigin(r, z, originRequest{
+		method:           http.MethodGet,
+		ifNoneMatch:      etag,
+		ownsRevalidation: true,
+	})
 	if err != nil {
 		if found && entry.UsableAsStale(now) {
 			writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "STALE")
@@ -140,6 +144,13 @@ var conditionalRequestHeaders = []string{
 // originRequest describes how the edge should talk to the origin for one
 // client request.
 type originRequest struct {
+	// method overrides the client's method for the origin request; empty
+	// means "use the client's". The caching path always sets GET: HEAD folds
+	// onto GET's cache key (cachekey.NormalizeMethod), and HTTP forbids a
+	// body on a HEAD response, so fetching with HEAD would store the shared
+	// entry with an empty body. writeEntry still omits the body when the
+	// CLIENT asked for HEAD.
+	method string
 	// ifNoneMatch is the edge's OWN cached ETag, empty when it has none.
 	ifNoneMatch string
 	// ownsRevalidation is true on the caching path, where the edge issues
@@ -163,6 +174,9 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 	outReq.URL.Path = r.URL.Path
 	outReq.Host = target.Host
 	outReq.RequestURI = ""
+	if spec.method != "" {
+		outReq.Method = spec.method
+	}
 	if spec.ownsRevalidation {
 		for _, name := range conditionalRequestHeaders {
 			outReq.Header.Del(name)
