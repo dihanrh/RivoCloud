@@ -58,7 +58,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := cachekey.Build(z.ID, cachekey.NormalizeMethod(r.Method), r.Host, r.URL.Path, r.URL.RawQuery)
 	now := h.now()
 
-	entry, hitLayerIdx, found := h.lookup(r.Context(), key)
+	entry, hitLayerIdx, found := h.lookup(r.Context(), key, now)
 	if found && entry.Fresh(now) {
 		h.populateFasterLayers(r.Context(), key, entry, hitLayerIdx)
 		writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "HIT")
@@ -230,7 +230,18 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 	return &originResult{response: resp, decision: decision}, nil
 }
 
-func (h *CachingHandler) lookup(ctx context.Context, key string) (cachestore.Entry, int, bool) {
+// lookup scans the layers fastest-to-slowest and returns the first FRESH copy
+// it finds, not merely the first copy. Stopping at a stale faster layer would
+// make every replica whose L1 holds an expired object re-fetch from the origin
+// even when the shared L2 already has a fresh one — which is the whole point
+// of having an L2. Stale copies passed over on the way are still remembered
+// (the most-recently-expired one wins) so revalidation-with-ETag and
+// stale-if-error have something to work with when no layer is fresh.
+func (h *CachingHandler) lookup(ctx context.Context, key string, now time.Time) (cachestore.Entry, int, bool) {
+	var (
+		bestStale    cachestore.Entry
+		bestStaleIdx = -1
+	)
 	for i, layer := range h.Layers {
 		if layer == nil {
 			continue
@@ -240,9 +251,18 @@ func (h *CachingHandler) lookup(ctx context.Context, key string) (cachestore.Ent
 			log.Printf("cache layer %d get error: %v", i, err)
 			continue
 		}
-		if ok {
+		if !ok {
+			continue
+		}
+		if entry.Fresh(now) {
 			return entry, i, true
 		}
+		if bestStaleIdx == -1 || entry.ExpiresAt.After(bestStale.ExpiresAt) {
+			bestStale, bestStaleIdx = entry, i
+		}
+	}
+	if bestStaleIdx != -1 {
+		return bestStale, bestStaleIdx, true
 	}
 	return cachestore.Entry{}, -1, false
 }
@@ -347,7 +367,8 @@ func (h *CachingHandler) negotiateEncoding(r *http.Request, baseKey string, iden
 
 func (h *CachingHandler) gzipVariant(ctx context.Context, baseKey string, identity cachestore.Entry) cachestore.Entry {
 	gzKey := baseKey + ":gz"
-	if cached, _, ok := h.lookup(ctx, gzKey); ok && cached.Fresh(h.now()) {
+	now := h.now()
+	if cached, _, ok := h.lookup(ctx, gzKey, now); ok && cached.Fresh(now) {
 		return cached
 	}
 
