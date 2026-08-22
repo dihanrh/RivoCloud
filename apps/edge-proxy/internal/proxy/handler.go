@@ -4,9 +4,11 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"rivocloud/edge-proxy/internal/cachekey"
@@ -192,6 +194,8 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 	if spec.method != "" {
 		outReq.Method = spec.method
 	}
+	stripHopByHopHeaders(outReq.Header)
+	appendForwardedFor(outReq.Header, r.RemoteAddr)
 	if spec.ownsRevalidation {
 		for _, name := range conditionalRequestHeaders {
 			outReq.Header.Del(name)
@@ -237,6 +241,52 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 // of having an L2. Stale copies passed over on the way are still remembered
 // (the most-recently-expired one wins) so revalidation-with-ETag and
 // stale-if-error have something to work with when no layer is fresh.
+// hopByHopHeaders are scoped to a single connection and must never cross a
+// proxy boundary (RFC 7230 §6.1). Note Proxy-Authorization is hop-scoped
+// while plain Authorization is end-to-end and is deliberately forwarded.
+var hopByHopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func stripHopByHopHeaders(header http.Header) {
+	// Connection also NOMINATES further field names as hop-scoped, so read it
+	// before deleting it.
+	for _, nominated := range header.Values("Connection") {
+		for _, name := range strings.Split(nominated, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				header.Del(name)
+			}
+		}
+	}
+	for _, name := range hopByHopHeaders {
+		header.Del(name)
+	}
+}
+
+// appendForwardedFor adds the immediate client's IP to the X-Forwarded-For
+// chain, preserving any hops recorded upstream of this edge.
+func appendForwardedFor(header http.Header, remoteAddr string) {
+	ip, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		ip = remoteAddr // no port (or unparseable); use it as-is
+	}
+	if ip == "" {
+		return
+	}
+	if prior := header.Get("X-Forwarded-For"); prior != "" {
+		header.Set("X-Forwarded-For", prior+", "+ip)
+		return
+	}
+	header.Set("X-Forwarded-For", ip)
+}
+
 func (h *CachingHandler) lookup(ctx context.Context, key string, now time.Time) (cachestore.Entry, int, bool) {
 	var (
 		bestStale    cachestore.Entry
