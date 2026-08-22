@@ -121,6 +121,13 @@ func (h *CachingHandler) proxyUncached(w http.ResponseWriter, r *http.Request, z
 		http.Error(w, "origin unreachable", http.StatusBadGateway)
 		return
 	}
+	if result.notModified {
+		// fetchOrigin closes and discards the body of a 304, leaving
+		// result.response nil — a 304 carries no body anyway, so relay the
+		// bare status before touching it.
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	defer result.response.Body.Close()
 	for k, vs := range result.response.Header {
 		for _, v := range vs {
