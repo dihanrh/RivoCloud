@@ -29,8 +29,60 @@ func newTestRedisLayer(t *testing.T) cachestore.Layer {
 		t.Fatalf("invalid REDIS_URL %q: %v", url, err)
 	}
 	client := redis.NewClient(opts)
-	t.Cleanup(func() { client.FlushDB(context.Background()); client.Close() })
+	// Deliberately NO FlushDB here: the per-call key prefix below already
+	// isolates this layer, and Redis is shared with internal/cachestore's own
+	// integration tests and with @rivocloud/identity-service — which run
+	// concurrently under `pnpm turbo test:integration`. Keys expire via the
+	// TTL cachestore.Redis sets on every write.
+	t.Cleanup(func() { client.Close() })
 	return cachestore.NewRedis(client, fmt.Sprintf("edge-proxy-test:%d:", time.Now().UnixNano()))
+}
+
+// The helper's per-call key prefix already isolates it, so its cleanup must
+// not touch anything else in the shared Redis. Go test packages and
+// `pnpm turbo test:integration` run in parallel, so a FlushDB here destroys
+// internal/cachestore's own Redis fixtures and @rivocloud/identity-service's
+// refresh tokens.
+func TestNewTestRedisLayer_CleanupLeavesUnrelatedKeysAlone(t *testing.T) {
+	url := os.Getenv("REDIS_URL")
+	if url == "" {
+		url = "redis://localhost:6379"
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("invalid REDIS_URL %q: %v", url, err)
+	}
+	client := redis.NewClient(opts)
+	defer client.Close()
+
+	ctx := context.Background()
+	bystander := fmt.Sprintf("some-other-package:%d:refresh-token", time.Now().UnixNano())
+	if err := client.Set(ctx, bystander, "belongs-to-another-test-suite", time.Minute).Err(); err != nil {
+		t.Fatalf("failed to seed the bystander key: %v", err)
+	}
+	defer client.Del(ctx, bystander)
+
+	// Run the helper in a subtest so its t.Cleanup fires before we assert.
+	t.Run("uses-the-helper", func(t *testing.T) {
+		layer := newTestRedisLayer(t)
+		entry := cachestore.Entry{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       []byte("x"),
+			StaleUntil: time.Now().Add(time.Minute),
+		}
+		if err := layer.Set(ctx, "some-key", entry); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	n, err := client.Exists(ctx, bystander).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatal("newTestRedisLayer's cleanup destroyed a key belonging to another test suite (FlushDB on a shared Redis)")
+	}
 }
 
 func TestCachingHandler_WithRedis_SecondRequestIsHitFromRedis(t *testing.T) {
