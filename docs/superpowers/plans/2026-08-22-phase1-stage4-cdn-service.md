@@ -382,12 +382,12 @@ describe('GET /api/v1/health', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 7: Run the test to verify it fails**
 
 Run: `pnpm --filter @rivocloud/cdn-service install && pnpm --filter @rivocloud/cdn-service run test:integration` (needs `DATABASE_URL`/`REDIS_URL`/`NATS_URL`/`INTERNAL_API_SECRET` in the environment — reuse the same local values `apps/identity-service` uses).
 Expected: FAIL — `app.module.js` does not exist yet.
 
-- [ ] **Step 7: Create `src/health/health.controller.ts`, `src/app.module.ts`, `src/main.ts`**
+- [ ] **Step 8: Create `src/health/health.controller.ts`, `src/app.module.ts`, `src/main.ts`**
 
 `src/health/health.controller.ts`:
 ```typescript
@@ -437,12 +437,12 @@ async function bootstrap() {
 bootstrap();
 ```
 
-- [ ] **Step 8: Run the test to verify it passes**
+- [ ] **Step 9: Run the test to verify it passes**
 
 Run: `pnpm --filter @rivocloud/cdn-service run test:integration`
 Expected: PASS.
 
-- [ ] **Step 9: Update the pnpm lockfile and confirm the whole monorepo still lints/typechecks**
+- [ ] **Step 10: Update the pnpm lockfile and confirm the whole monorepo still lints/typechecks**
 
 ```bash
 pnpm install
@@ -450,7 +450,7 @@ pnpm turbo lint typecheck --filter=@rivocloud/cdn-service
 ```
 Expected: PASS, and `pnpm-lock.yaml` now has an entry for `@rivocloud/cdn-service`.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add apps/cdn-service pnpm-lock.yaml
