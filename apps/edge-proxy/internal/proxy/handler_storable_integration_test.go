@@ -5,6 +5,7 @@ package proxy
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"rivocloud/edge-proxy/internal/cachestore"
@@ -237,6 +238,41 @@ func TestCachingHandler_OriginVaryIsRelayedAndMakesResponseUncacheable(t *testin
 	h.ServeHTTP(httptest.NewRecorder(), req())
 	if hits != 2 {
 		t.Fatalf("expected a Vary the edge cannot honor to make the response uncacheable, got %d origin hits", hits)
+	}
+}
+
+func TestCachingHandler_MultiLineOriginVaryStillMakesResponseUncacheable(t *testing.T) {
+	hits := 0
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		// A gzip middleware adds "Vary: Accept-Encoding" as its own header
+		// line, then the app adds "Vary: Cookie" as a separate line — two
+		// lines, not one comma-joined value. http.Header.Get only ever
+		// returns the first.
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.Header().Add("Vary", "Cookie")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("varies by cookie, encoded separately"))
+	}))
+	defer origin.Close()
+
+	h, _ := newStorableTestHandler(t, origin)
+	req := func() *http.Request {
+		r := httptest.NewRequest("GET", "http://demo.test/dashboard", nil)
+		r.Host = "demo.test"
+		return r
+	}
+
+	rec1 := httptest.NewRecorder()
+	h.ServeHTTP(rec1, req())
+	if got := strings.Join(rec1.Header().Values("Vary"), ","); !strings.Contains(got, "Cookie") {
+		t.Fatalf("expected the origin's Cookie Vary (on its second header line) to still be relayed, got %q", got)
+	}
+
+	h.ServeHTTP(httptest.NewRecorder(), req())
+	if hits != 2 {
+		t.Fatalf("expected a Cookie-varying response to never be cached even when Accept-Encoding is also named on an earlier Vary line, got %d origin hits", hits)
 	}
 }
 

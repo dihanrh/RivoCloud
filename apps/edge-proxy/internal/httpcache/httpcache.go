@@ -92,7 +92,7 @@ func Storable(statusCode int, respHeader http.Header, requestAuthenticated bool)
 	if !storableStatusCodes[statusCode] {
 		return false
 	}
-	if !VaryOnlyAcceptEncoding(respHeader.Get("Vary")) {
+	if !VaryOnlyAcceptEncoding(strings.Join(respHeader.Values("Vary"), ",")) {
 		return false
 	}
 	if requestAuthenticated && !parseCacheControl(respHeader.Get("Cache-Control")).public {

@@ -388,7 +388,7 @@ func writeEntry(w http.ResponseWriter, r *http.Request, entry cachestore.Entry, 
 	// the origin's Vary: a response varying by anything else is relayed with
 	// that Vary intact (and is non-cacheable, per httpcache.Storable), so
 	// downstream caches don't inherit a claim the origin never made.
-	if httpcache.VaryOnlyAcceptEncoding(entry.Header.Get("Vary")) {
+	if httpcache.VaryOnlyAcceptEncoding(strings.Join(entry.Header.Values("Vary"), ",")) {
 		w.Header().Set("Vary", "Accept-Encoding")
 	}
 	w.Header().Set("X-RivoCloud-Cache", source)

@@ -113,6 +113,15 @@ func TestStorable_VaryOnAnythingButAcceptEncodingIsNotStorable(t *testing.T) {
 	}
 }
 
+func TestStorable_MultiLineVaryIsNotMissedByOnlyReadingTheFirstLine(t *testing.T) {
+	h := http.Header{}
+	h.Add("Vary", "Accept-Encoding")
+	h.Add("Vary", "Cookie")
+	if Storable(http.StatusOK, h, false) {
+		t.Fatal("expected a second Vary header line naming Cookie to still make the response non-storable, even though the first line names only Accept-Encoding")
+	}
+}
+
 func TestStorable_AuthenticatedRequestNeedsExplicitPublic(t *testing.T) {
 	plain := http.Header{}
 	plain.Set("Cache-Control", "max-age=600")
