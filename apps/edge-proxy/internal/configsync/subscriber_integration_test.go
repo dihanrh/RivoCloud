@@ -35,6 +35,9 @@ func TestSubscribe_EvictsOnConfigZonesUpdated(t *testing.T) {
 		t.Fatalf("failed to connect a publisher: %v", err)
 	}
 	defer nc.Close()
+	if err := nc.Flush(); err != nil {
+		t.Fatalf("flush failed: %v", err)
+	}
 
 	payload, _ := json.Marshal(map[string]string{"zoneId": "zone-42"})
 	if err := nc.Publish("config.zones.updated", payload); err != nil {

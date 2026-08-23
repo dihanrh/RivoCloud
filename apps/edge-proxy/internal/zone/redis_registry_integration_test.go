@@ -111,3 +111,32 @@ func TestRedisRegistry_CachesForSixtySecondsThenRereadsRedisOnEvict(t *testing.T
 		t.Fatalf("expected EvictZone to force a re-read, got %+v ok=%v", third, ok)
 	}
 }
+
+func TestRedisRegistry_NegativeLookupExpiresQuicklyThenFindsANewlyPublishedZone(t *testing.T) {
+	client := newTestRedisClient(t)
+	// A prior run of this same test (or the seed below) may have left this
+	// key behind with no TTL — clear it so the "unknown host" premise holds.
+	if err := client.Del(context.Background(), "zone_host:brand-new.cdn.rivocloud.dev").Err(); err != nil {
+		t.Fatal(err)
+	}
+	registry := NewRedisRegistry(client)
+
+	_, ok := registry.Resolve("brand-new.cdn.rivocloud.dev")
+	if ok {
+		t.Fatal("expected unpublished host to not resolve")
+	}
+
+	time.Sleep(2100 * time.Millisecond)
+
+	seedZoneConfig(t, client, "brand-new.cdn.rivocloud.dev", "zone-4", redisConfig{
+		ID: "zone-4", Slug: "brand-new", OriginURL: "https://fresh.example.com", CacheTTL: 60, Enabled: true,
+	})
+
+	cfg, ok := registry.Resolve("brand-new.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected the negative cache entry to have expired, allowing the newly published zone to resolve")
+	}
+	if cfg.OriginURL != "https://fresh.example.com" {
+		t.Fatalf("unexpected config after negative cache expiry: %+v", cfg)
+	}
+}

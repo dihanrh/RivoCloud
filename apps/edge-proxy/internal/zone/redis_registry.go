@@ -46,6 +46,11 @@ type RedisRegistry struct {
 	client *redis.Client
 	ttl    time.Duration
 
+	// negativeTTL bounds how long a "host not found" result stays cached.
+	// It's kept much shorter than ttl so a host queried just before its
+	// zone is created doesn't stay stuck as not-found for up to 60s.
+	negativeTTL time.Duration
+
 	mu           sync.RWMutex
 	hostToZoneID map[string]hostEntry
 	zoneConfig   map[string]configEntry
@@ -55,6 +60,7 @@ func NewRedisRegistry(client *redis.Client) *RedisRegistry {
 	return &RedisRegistry{
 		client:       client,
 		ttl:          60 * time.Second,
+		negativeTTL:  2 * time.Second,
 		hostToZoneID: make(map[string]hostEntry),
 		zoneConfig:   make(map[string]configEntry),
 	}
@@ -95,8 +101,12 @@ func (r *RedisRegistry) resolveZoneID(host string) (string, bool) {
 		log.Printf("zone: zone_host lookup error for %q: %v", host, err)
 	}
 
+	expiry := r.ttl
+	if !found {
+		expiry = r.negativeTTL
+	}
 	r.mu.Lock()
-	r.hostToZoneID[host] = hostEntry{zoneID: zoneID, found: found, expiresAt: time.Now().Add(r.ttl)}
+	r.hostToZoneID[host] = hostEntry{zoneID: zoneID, found: found, expiresAt: time.Now().Add(expiry)}
 	r.mu.Unlock()
 	return zoneID, found
 }
