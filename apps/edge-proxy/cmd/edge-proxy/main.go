@@ -9,6 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"rivocloud/edge-proxy/internal/cachestore"
+	"rivocloud/edge-proxy/internal/configsync"
 	"rivocloud/edge-proxy/internal/health"
 	"rivocloud/edge-proxy/internal/proxy"
 	"rivocloud/edge-proxy/internal/zone"
@@ -26,14 +27,8 @@ func main() {
 		log.Fatalf("failed to create L1 cache: %v", err)
 	}
 
-	zones := zone.NewStaticRegistry([]zone.Config{
-		{
-			ID:         "demo",
-			Host:       "localhost",
-			OriginURL:  demoOriginURL(),
-			DefaultTTL: time.Hour,
-		},
-	})
+	zones := zone.NewRedisRegistry(redisClient)
+	configsync.Subscribe(natsURL(), zones)
 
 	handler := &proxy.CachingHandler{
 		Zones: zones,
@@ -48,7 +43,7 @@ func main() {
 	mux.Handle("/healthz", health.NewHandler())
 	mux.Handle("/", handler)
 
-	log.Printf("edge-proxy listening on :%s (demo zone origin: %s)", port, demoOriginURL())
+	log.Printf("edge-proxy listening on :%s (zone config read from Redis, published by the CDN Service)", port)
 	if err := newServer(port, mux).ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
@@ -75,11 +70,11 @@ func newServer(port string, handler http.Handler) *http.Server {
 	}
 }
 
-func demoOriginURL() string {
-	if u := os.Getenv("EDGE_PROXY_DEMO_ORIGIN_URL"); u != "" {
+func natsURL() string {
+	if u := os.Getenv("NATS_URL"); u != "" {
 		return u
 	}
-	return "http://localhost:9999"
+	return "nats://localhost:4222"
 }
 
 func l1MaxEntries() int {

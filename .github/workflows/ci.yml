@@ -92,7 +92,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @rivocloud/db exec prisma migrate deploy
       - run: node apps/identity-service/scripts/generate-jwt-keys.cjs
-      - run: pnpm turbo test:integration
+      - run: pnpm turbo test:integration --concurrency=1
 
   security-scan:
     runs-on: ubuntu-latest

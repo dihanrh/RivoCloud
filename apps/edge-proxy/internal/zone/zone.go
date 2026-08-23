@@ -6,9 +6,11 @@ import (
 )
 
 // Config describes one CDN zone: which inbound Host header it matches and
-// which origin server requests are forwarded to. Stage 3 hardcodes these in
-// main.go; the CDN Service (Stage 4) later replaces StaticRegistry with a
-// Redis-backed one implementing the same Registry interface.
+// which origin server requests are forwarded to. Stage 3 hardcoded these in
+// main.go; Stage 4's zone.RedisRegistry now resolves them from Redis
+// instead. Host is populated by StaticRegistry for its own lookup; a
+// Config returned by RedisRegistry leaves it empty, since nothing
+// downstream reads Host off an already-resolved Config.
 type Config struct {
 	ID         string
 	Host       string
