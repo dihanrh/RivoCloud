@@ -38,7 +38,7 @@ MinIO needs the webhook target defined before any bucket-creation test can call 
 
 ```yaml
       MINIO_NOTIFY_WEBHOOK_ENABLE_STORAGE: "on"
-      MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://host.docker.internal:3002/internal/storage/minio-webhook"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://host.docker.internal:3004/internal/storage/minio-webhook"
       MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_STORAGE: "dev_minio_webhook_token_change_me"
 ```
 
@@ -103,7 +103,7 @@ apps/storage-service/
 
 **Interfaces:**
 - Consumes: `@rivocloud/db`, `@rivocloud/config`.
-- Produces: `AppEnv` (with `MINIO_URL`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_WEBHOOK_AUTH_TOKEN`, `IDENTITY_SERVICE_URL`, `INTERNAL_API_SECRET`, `PORT` default `3002`), `APP_ENV`/`PRISMA`/`MINIO` DI tokens, `EventsService`, a booting NestJS app with `GET /api/v1/health`.
+- Produces: `AppEnv` (with `MINIO_URL`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_WEBHOOK_AUTH_TOKEN`, `IDENTITY_SERVICE_URL`, `INTERNAL_API_SECRET`, `PORT` default `3004`), `APP_ENV`/`PRISMA`/`MINIO` DI tokens, `EventsService`, a booting NestJS app with `GET /api/v1/health`.
 
 - [ ] **Step 1: Add the MinIO webhook env vars to `infrastructure/compose/docker-compose.infra.yml`**
 
@@ -122,7 +122,7 @@ Change the `environment:` block to:
       MINIO_ROOT_USER: rivocloud
       MINIO_ROOT_PASSWORD: rivocloud_dev_password
       MINIO_NOTIFY_WEBHOOK_ENABLE_STORAGE: "on"
-      MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://host.docker.internal:3002/internal/storage/minio-webhook"
+      MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://host.docker.internal:3004/internal/storage/minio-webhook"
       MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_STORAGE: "dev_minio_webhook_token_change_me"
 ```
 
@@ -261,7 +261,7 @@ import { z } from 'zod';
 import { baseEnvSchema, validateEnv } from '@rivocloud/config';
 
 export const envSchema = baseEnvSchema.extend({
-  PORT: z.coerce.number().int().positive().default(3002),
+  PORT: z.coerce.number().int().positive().default(3004),
   IDENTITY_SERVICE_URL: z.string().url().default('http://localhost:3001'),
   INTERNAL_API_SECRET: z.string().min(16),
   MINIO_URL: z.string().url().default('http://localhost:9000'),
@@ -2553,7 +2553,7 @@ No CI changes are needed: `apps/storage-service` is picked up automatically by `
           MINIO_ROOT_USER: rivocloud
           MINIO_ROOT_PASSWORD: rivocloud_dev_password
           MINIO_NOTIFY_WEBHOOK_ENABLE_STORAGE: "on"
-          MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://localhost:3002/internal/storage/minio-webhook"
+          MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://localhost:3004/internal/storage/minio-webhook"
           MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_STORAGE: "ci_minio_webhook_token_placeholder"
         ports:
           - 9000:9000
@@ -2572,7 +2572,7 @@ And add to the job's `env:` block:
       MINIO_ROOT_PASSWORD: rivocloud_dev_password
       MINIO_WEBHOOK_AUTH_TOKEN: ci_minio_webhook_token_placeholder
 ```
-Note CI's webhook endpoint uses `localhost`, not `host.docker.internal` — GitHub Actions service containers and the job's own runner share the same network namespace (unlike this dev machine's Docker Desktop VM boundary), so `localhost:3002` from inside the `minio` service container reaches the `storage-service` test process running directly on the runner. If this specific detail turns out to be wrong when CI actually runs (service-container networking specifics can surprise you), that's a CI-only follow-up — it doesn't affect any of Tasks 1–8's local verification.
+Note CI's webhook endpoint uses `localhost`, not `host.docker.internal` — GitHub Actions service containers and the job's own runner share the same network namespace (unlike this dev machine's Docker Desktop VM boundary), so `localhost:3004` from inside the `minio` service container reaches the `storage-service` test process running directly on the runner. If this specific detail turns out to be wrong when CI actually runs (service-container networking specifics can surprise you), that's a CI-only follow-up — it doesn't affect any of Tasks 1–8's local verification.
 
 - [ ] **Step 1: Update the PRD to mark Stage 5 done**
 
@@ -2630,13 +2630,13 @@ ORG_ACCESS_TOKEN=$(echo "$ORG" | node -pe 'JSON.parse(require("fs").readFileSync
 
 Create a bucket and initiate an upload:
 ```bash
-BUCKET=$(curl -s -X POST http://localhost:3002/api/v1/buckets \
+BUCKET=$(curl -s -X POST http://localhost:3004/api/v1/buckets \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"E2E Bucket"}')
 echo "$BUCKET"
 BUCKET_ID=$(echo "$BUCKET" | node -pe 'JSON.parse(require("fs").readFileSync(0)).id')
 
-UPLOAD=$(curl -s -X POST "http://localhost:3002/api/v1/buckets/$BUCKET_ID/objects/upload" \
+UPLOAD=$(curl -s -X POST "http://localhost:3004/api/v1/buckets/$BUCKET_ID/objects/upload" \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN" -H 'Content-Type: application/json' \
   -d '{"key":"hello.txt","contentType":"text/plain"}')
 echo "$UPLOAD"
@@ -2654,18 +2654,18 @@ sleep 1
 
 Confirm the object flipped from `pending` to `ready` with the real size/ETag MinIO reported — this is the webhook firing for real, not a simulated payload:
 ```bash
-curl -s "http://localhost:3002/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
+curl -s "http://localhost:3004/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN"
 ```
 Expected: `{"status":"ready","size":"28", ...}` (or whatever `/tmp/e2e-upload.txt`'s real byte count is) with a non-null `etag` — proving MinIO's real webhook, not this plan's simulated test payload, drove the transition.
 
 Delete the object and the (now-empty) bucket:
 ```bash
-curl -s -X DELETE "http://localhost:3002/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
+curl -s -X DELETE "http://localhost:3004/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN"
-curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:3002/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
+curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:3004/api/v1/buckets/$BUCKET_ID/objects/hello.txt" \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN"
-curl -s -X DELETE "http://localhost:3002/api/v1/buckets/$BUCKET_ID" \
+curl -s -X DELETE "http://localhost:3004/api/v1/buckets/$BUCKET_ID" \
   -H "Authorization: Bearer $ORG_ACCESS_TOKEN"
 ```
 Expected: the object GET after delete returns `404`; the bucket delete returns `{"success":true}` (it's empty now, since the object is soft-deleted and excluded from the `remaining` count Task 4's `remove()` checks).
