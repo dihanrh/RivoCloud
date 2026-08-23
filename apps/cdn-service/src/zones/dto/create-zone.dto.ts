@@ -1,8 +1,9 @@
-import { IsIn, IsInt, IsOptional, IsUrl, Min, MinLength, IsString } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsUrl, Min, MinLength, MaxLength, IsString } from 'class-validator';
 
 export class CreateZoneDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(54)
   name!: string;
 
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true })

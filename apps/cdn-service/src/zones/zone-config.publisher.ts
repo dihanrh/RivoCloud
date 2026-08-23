@@ -36,6 +36,11 @@ export class ZoneConfigPublisher {
   }
 
   private hostFor(zone: PullZone): string {
-    return `${zone.slug}.${this.env.CDN_ROOT_DOMAIN}`;
+    // pull_zones.slug is only unique per-org (@@unique([orgId, slug])), but
+    // this host is a single global DNS namespace shared by every tenant —
+    // appending a slice of the zone's own UUID makes it globally unique by
+    // construction, so two orgs naming a zone the same thing can never
+    // collide, overwrite, or delete each other's edge hostname.
+    return `${zone.slug}-${zone.id.slice(0, 8)}.${this.env.CDN_ROOT_DOMAIN}`;
   }
 }

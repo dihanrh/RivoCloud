@@ -62,8 +62,8 @@ export class ZonesService {
 
   async remove(orgId: string, zoneId: string): Promise<void> {
     const zone = await this.findOwned(orgId, zoneId);
-    await this.db.pullZone.delete({ where: { id: zoneId } });
     await this.publisher.unpublish(zone);
+    await this.db.pullZone.delete({ where: { id: zoneId } });
   }
 
   private async findOwned(orgId: string, zoneId: string): Promise<PullZone> {

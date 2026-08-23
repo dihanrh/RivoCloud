@@ -36,7 +36,8 @@ describe('ZoneConfigPublisher', () => {
 
     const config = JSON.parse((await redis.get(`zone_config:${zone.id}`)) ?? '{}');
     expect(config).toMatchObject({ id: zone.id, originUrl: 'https://api.example.com', cacheTtl: 3600, enabled: true });
-    expect(await redis.get('zone_host:my-blog.cdn.rivocloud.dev')).toBe(zone.id);
+    const expectedHost = `my-blog-${zone.id.slice(0, 8)}.cdn.rivocloud.dev`;
+    expect(await redis.get(`zone_host:${expectedHost}`)).toBe(zone.id);
   });
 
   it('publishes a config.zones.updated NATS event carrying the zoneId', async () => {
@@ -51,6 +52,7 @@ describe('ZoneConfigPublisher', () => {
     await publisher.unpublish(zone);
 
     expect(await redis.get(`zone_config:${zone.id}`)).toBeNull();
-    expect(await redis.get('zone_host:my-blog.cdn.rivocloud.dev')).toBeNull();
+    const expectedHost = `my-blog-${zone.id.slice(0, 8)}.cdn.rivocloud.dev`;
+    expect(await redis.get(`zone_host:${expectedHost}`)).toBeNull();
   });
 });
