@@ -6,6 +6,9 @@ import { PHYSICAL_BUCKET_PREFIX } from '../buckets/bucket-name.util.js';
 // (e.g. "assets/hero.jpg") — so split on the LAST "/", not the first.
 export function splitKeyAndVersion(rawMinioKey: string): [key: string, versionId: string] {
   const lastSlash = rawMinioKey.lastIndexOf('/');
+  if (lastSlash === -1) {
+    return [rawMinioKey, ''];
+  }
   return [rawMinioKey.slice(0, lastSlash), rawMinioKey.slice(lastSlash + 1)];
 }
 

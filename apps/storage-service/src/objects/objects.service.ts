@@ -13,6 +13,7 @@ import type { InitiateUploadDto } from './dto/initiate-upload.dto.js';
 import type { ListObjectsDto } from './dto/list-objects.dto.js';
 
 const PRESIGNED_UPLOAD_TTL_SECONDS = 15 * 60;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class ObjectsService {
@@ -30,16 +31,22 @@ export class ObjectsService {
     const versionId = randomUUID();
     const physicalName = physicalBucketName(bucketId);
     const minioObjectKey = `${dto.key}/${versionId}`;
-    const object = await this.db.storageObject.create({
-      data: {
-        bucketId,
-        key: dto.key,
-        versionId,
-        contentType: dto.contentType ?? 'application/octet-stream',
-        size: dto.size !== undefined ? BigInt(dto.size) : null,
-        storagePath: `${physicalName}/${minioObjectKey}`,
-        status: 'pending',
-      },
+    const object = await this.db.$transaction(async (tx) => {
+      await tx.storageObject.updateMany({
+        where: { bucketId, key: dto.key, isLatest: true },
+        data: { isLatest: false },
+      });
+      return tx.storageObject.create({
+        data: {
+          bucketId,
+          key: dto.key,
+          versionId,
+          contentType: dto.contentType ?? 'application/octet-stream',
+          size: dto.size !== undefined ? BigInt(dto.size) : null,
+          storagePath: `${physicalName}/${minioObjectKey}`,
+          status: 'pending',
+        },
+      });
     });
     const uploadUrl = await this.minio.presignedPutObject(physicalName, minioObjectKey, PRESIGNED_UPLOAD_TTL_SECONDS);
     return { objectId: object.id, uploadUrl };
@@ -84,7 +91,10 @@ export class ObjectsService {
   }
 
   private async findLatest(bucketId: string, key: string) {
-    const object = await this.db.storageObject.findFirst({ where: { bucketId, key, isLatest: true } });
+    const object = await this.db.storageObject.findFirst({
+      where: { bucketId, key, isLatest: true },
+      orderBy: { createdAt: 'desc' },
+    });
     if (!object || object.status === 'deleted') {
       throw new NotFoundException('Object not found');
     }
@@ -96,9 +106,14 @@ export class ObjectsService {
     const rawKey = decodeMinioObjectKey(record.s3.object.key);
     const [key, versionId] = splitKeyAndVersion(rawKey);
 
+    if (!UUID_PATTERN.test(bucketId) || !UUID_PATTERN.test(versionId)) {
+      this.logger.warn(`ignoring MinIO notification with a malformed bucket/version id: bucket=${record.s3.bucket.name} key=${record.s3.object.key}`);
+      return;
+    }
+
     const object = await this.db.storageObject.findFirst({ where: { bucketId, key, versionId } });
-    if (!object) {
-      return; // no matching pending upload — ignore (defensive; shouldn't happen for our own uploads)
+    if (!object || object.status === 'deleted') {
+      return; // no matching pending upload, or the object was deleted before MinIO confirmed the upload — ignore
     }
 
     await this.db.storageObject.update({

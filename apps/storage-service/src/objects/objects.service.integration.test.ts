@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
 import { prisma } from '@rivocloud/db';
@@ -40,6 +40,10 @@ describe('ObjectsService', () => {
   const buckets = new BucketsService(prisma, minio);
   const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
   const service = new ObjectsService(prisma, minio, buckets, events);
+
+  afterAll(async () => {
+    await events.onModuleDestroy();
+  });
 
   beforeEach(async () => {
     await prisma.storageObject.deleteMany();
@@ -154,5 +158,43 @@ describe('ObjectsService', () => {
     expect(listed).toBeDefined();
     expect(typeof listed!.size).toBe('string');
     expect(listed!.size).toBe('98765');
+  });
+
+  // Regression test: re-uploading the same key used to leave two rows both
+  // marked isLatest: true (initiateUpload never demoted the prior row), so
+  // which one findLatest()/getForOrg() returned was arbitrary. The fix wraps
+  // the demote + create in a transaction.
+  it('demotes the previous isLatest row when a key is re-uploaded (overwrite)', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    await service.initiateUpload(org.id, bucket.id, { key: 'overwrite.txt' });
+    const second = await service.initiateUpload(org.id, bucket.id, { key: 'overwrite.txt' });
+
+    const rows = await prisma.storageObject.findMany({ where: { bucketId: bucket.id, key: 'overwrite.txt' } });
+    expect(rows).toHaveLength(2);
+    const latestRows = rows.filter((r) => r.isLatest);
+    expect(latestRows).toHaveLength(1);
+    expect(latestRows[0]!.id).toBe(second.objectId);
+
+    const current = await service.getForOrg(org.id, bucket.id, 'overwrite.txt');
+    expect(current.id).toBe(second.objectId);
+  });
+
+  // Regression test: markUploaded() used to match on {bucketId, key, versionId}
+  // with no status check, so a MinIO webhook arriving after the object was
+  // soft-deleted (client's PUT completed within the presigned URL's TTL, after
+  // the DELETE) would resurrect it as 'ready'.
+  it('does not resurrect a soft-deleted object when a late markUploaded notification arrives', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    const { objectId } = await service.initiateUpload(org.id, bucket.id, { key: 'late-upload.txt' });
+    const pending = await prisma.storageObject.findUnique({ where: { id: objectId } });
+
+    await service.remove(org.id, bucket.id, 'late-upload.txt');
+
+    await service.markUploaded(
+      minioNotificationRecord(physicalBucketName(bucket.id), `late-upload.txt/${pending!.versionId}`, 555, 'etag-late'),
+    );
+
+    const after = await prisma.storageObject.findUnique({ where: { id: objectId } });
+    expect(after!.status).toBe('deleted');
   });
 });

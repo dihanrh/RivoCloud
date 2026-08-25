@@ -27,7 +27,9 @@ export class BucketsController {
   @Get()
   @RequireStorageScope('read')
   list(@AuthCtx() auth: CombinedAuthContext, @Query('skip') skip?: string, @Query('take') take?: string) {
-    return this.buckets.list(requireOrgId(auth), Number(skip) || 0, Number(take) || 50);
+    const parsedSkip = Math.max(0, Number(skip) || 0);
+    const parsedTake = Math.min(100, Math.max(1, Number(take) || 50));
+    return this.buckets.list(requireOrgId(auth), parsedSkip, parsedTake);
   }
 
   @Get(':bucketId')

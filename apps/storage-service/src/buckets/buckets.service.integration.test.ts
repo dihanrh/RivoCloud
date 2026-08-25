@@ -53,6 +53,13 @@ describe('BucketsService', () => {
     expect(await minio.bucketExists(physicalBucketName(bucketB.id))).toBe(true);
   });
 
+  it('rejects creating a second bucket with the same name in the same org with 409, not a raw Prisma error', async () => {
+    const org = await seedOrg();
+    await service.create(org.id, { name: 'Duplicate Name' });
+
+    await expect(service.create(org.id, { name: 'Duplicate Name' })).rejects.toThrow(ConflictException);
+  });
+
   it('lists only the calling org buckets', async () => {
     const orgA = await seedOrg();
     const orgB = await seedOrg();

@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { PrismaClient, Bucket, Prisma } from '@rivocloud/db';
+import { Prisma } from '@rivocloud/db';
+import type { PrismaClient, Bucket } from '@rivocloud/db';
 import type { Client as MinioClient } from 'minio';
 import { NotificationConfig, QueueConfig, ObjectCreatedPut } from 'minio';
 import { PRISMA } from '../prisma/prisma.module.js';
@@ -18,9 +19,17 @@ export class BucketsService {
   ) {}
 
   async create(orgId: string, dto: CreateBucketDto) {
-    const bucket = await this.db.bucket.create({
-      data: { orgId, name: dto.name, region: dto.region ?? 'eu-central', public: dto.public ?? false },
-    });
+    let bucket;
+    try {
+      bucket = await this.db.bucket.create({
+        data: { orgId, name: dto.name, region: dto.region ?? 'eu-central', public: dto.public ?? false },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(`A bucket named "${dto.name}" already exists in this organization`);
+      }
+      throw error;
+    }
     const physicalName = physicalBucketName(bucket.id);
     await this.minio.makeBucket(physicalName, bucket.region);
     const notification = new NotificationConfig();

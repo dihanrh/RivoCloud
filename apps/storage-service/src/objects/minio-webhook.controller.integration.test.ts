@@ -100,4 +100,21 @@ describe('MinioWebhookController', () => {
       .send(minioNotificationBody(`rc-${randomUUID()}`, `nope.txt/${randomUUID()}`, 1, 'x'));
     expect(response.status).toBe(201);
   });
+
+  // Regression test: a physical MinIO bucket is subscribed to ALL
+  // ObjectCreatedPut events, not just ones from this service's own
+  // presigned-upload flow — so a notification can arrive with a bucket name
+  // that isn't shaped like "rc-<uuid>" and/or an object key with no "/" in it
+  // at all (e.g. something placed via `mc cp` directly, or a future feature).
+  // splitKeyAndVersion() used to corrupt a no-slash key instead of failing
+  // cleanly, and markUploaded() had no guard against a non-UUID bucket/version
+  // id reaching the Prisma query — both previously risked a 500 here instead
+  // of a clean no-op ignore.
+  it('ignores a malformed notification (unrecognized bucket name, no-slash key) without erroring', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/internal/storage/minio-webhook')
+      .set('Authorization', `Bearer ${WEBHOOK_TOKEN}`)
+      .send(minioNotificationBody('rc-unknown-bucket-id', 'not-a-versioned-key', 1, 'x'));
+    expect(response.status).toBe(201);
+  });
 });
