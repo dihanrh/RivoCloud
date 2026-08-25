@@ -6,6 +6,8 @@ import { PRISMA } from '../prisma/prisma.module.js';
 import { MINIO } from '../minio/minio.module.js';
 import { BucketsService } from '../buckets/buckets.service.js';
 import { physicalBucketName } from '../buckets/bucket-name.util.js';
+import { EventsService } from '../events/events.service.js';
+import { bucketIdFromPhysicalName, decodeMinioObjectKey, splitKeyAndVersion } from './object-key.util.js';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto.js';
 import type { ListObjectsDto } from './dto/list-objects.dto.js';
 
@@ -17,6 +19,7 @@ export class ObjectsService {
     @Inject(PRISMA) private readonly db: PrismaClient,
     @Inject(MINIO) private readonly minio: MinioClient,
     private readonly buckets: BucketsService,
+    private readonly events: EventsService,
   ) {}
 
   async initiateUpload(orgId: string, bucketId: string, dto: InitiateUploadDto) {
@@ -65,5 +68,26 @@ export class ObjectsService {
       throw new NotFoundException('Object not found');
     }
     return object;
+  }
+
+  async markUploaded(record: { s3: { bucket: { name: string }; object: { key: string; size: number; eTag: string } } }): Promise<void> {
+    const bucketId = bucketIdFromPhysicalName(record.s3.bucket.name);
+    const rawKey = decodeMinioObjectKey(record.s3.object.key);
+    const [key, versionId] = splitKeyAndVersion(rawKey);
+
+    const object = await this.db.storageObject.findFirst({ where: { bucketId, key, versionId } });
+    if (!object) {
+      return; // no matching pending upload — ignore (defensive; shouldn't happen for our own uploads)
+    }
+
+    await this.db.storageObject.update({
+      where: { id: object.id },
+      data: { status: 'ready', size: BigInt(record.s3.object.size), etag: record.s3.object.eTag },
+    });
+
+    const bucket = await this.db.bucket.findUnique({ where: { id: bucketId } });
+    if (bucket) {
+      await this.events.publish('object.uploaded', { bucketId, key, orgId: bucket.orgId });
+    }
   }
 }

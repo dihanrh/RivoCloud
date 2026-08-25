@@ -5,6 +5,7 @@ import { prisma } from '@rivocloud/db';
 import { Client as MinioClient } from 'minio';
 import { BucketsService } from '../buckets/buckets.service.js';
 import { ObjectsService } from './objects.service.js';
+import { EventsService } from '../events/events.service.js';
 
 const minio = new MinioClient({
   endPoint: '127.0.0.1',
@@ -23,7 +24,8 @@ async function seedOrgAndBucket(buckets: BucketsService, name = 'Test Bucket') {
 
 describe('ObjectsService', () => {
   const buckets = new BucketsService(prisma, minio);
-  const service = new ObjectsService(prisma, minio, buckets);
+  const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
+  const service = new ObjectsService(prisma, minio, buckets, events);
 
   beforeEach(async () => {
     await prisma.storageObject.deleteMany();
