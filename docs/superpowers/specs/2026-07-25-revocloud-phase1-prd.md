@@ -1,6 +1,6 @@
 # RivoCloud — Phase 1 Product Requirements Document (PRD)
 
-**Status:** Draft — Stages 1-4 (Infrastructure Foundation, Identity Service, Go Edge Proxy, CDN Service) complete, Stages 5–16 not started.
+**Status:** Draft — Stages 1-5 (Infrastructure Foundation, Identity Service, Go Edge Proxy, CDN Service, Storage Service) complete, Stages 6–16 not started.
 **Owner:** RivoCloud engineering.
 **Companion documents:**
 - [`2026-06-29-revocloud-master-architecture.md`](2026-06-29-revocloud-master-architecture.md) — product vision, long-term strategy, technology decisions (the "why" behind the whole product).
@@ -147,7 +147,7 @@ The 16-stage build order from the EDD (Section 11, Development Order), unchanged
 | 2 | Identity Service — auth, orgs, API keys, auth guard | 1 | ✅ Done | 1 | [`identity-service-and-auth.md`](../../concepts/identity-service-and-auth.md) |
 | 3 | Go Edge Proxy (Basic) — HTTP server, Redis (L2), in-process LRU (L1) | 2 | ✅ Done | 1 | [`edge-proxy-and-caching.md`](../../concepts/edge-proxy-and-caching.md) |
 | 4 | CDN Service — zone CRUD, config publish to Redis | 2 | ✅ Done | 2, 3 | [`cdn-zones-and-configuration.md`](../../concepts/cdn-zones-and-configuration.md) |
-| 5 | Storage Service — bucket CRUD, presigned upload, MinIO webhook | 3 | Not started | 2 | [`object-storage-and-uploads.md`](../../concepts/object-storage-and-uploads.md) |
+| 5 | Storage Service — bucket CRUD, presigned upload, MinIO webhook | 3 | ✅ Done | 2 | [`object-storage-and-uploads.md`](../../concepts/object-storage-and-uploads.md) |
 | 6 | Dashboard MVP — auth pages, zone UI, storage UI | 1–3 | Not started | 2, 4, 5 | [`dashboard-and-frontend.md`](../../concepts/dashboard-and-frontend.md) |
 | 7 | NATS Invalidation — cache invalidation + cache rules engine | 4 | Not started | 4 | [`cache-invalidation-and-messaging.md`](../../concepts/cache-invalidation-and-messaging.md) |
 | 8 | Custom Domains + TLS — Traefik Redis provider, DNS verification | 3 | Not started | 4 | [`custom-domains-and-tls.md`](../../concepts/custom-domains-and-tls.md) |
