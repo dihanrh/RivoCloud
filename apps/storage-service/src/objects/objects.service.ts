@@ -8,6 +8,7 @@ import { BucketsService } from '../buckets/buckets.service.js';
 import { physicalBucketName } from '../buckets/bucket-name.util.js';
 import { EventsService } from '../events/events.service.js';
 import { bucketIdFromPhysicalName, decodeMinioObjectKey, splitKeyAndVersion } from './object-key.util.js';
+import { toObjectResponse } from './object-response.util.js';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto.js';
 import type { ListObjectsDto } from './dto/list-objects.dto.js';
 
@@ -56,12 +57,12 @@ export class ObjectsService {
       this.db.storageObject.findMany({ where, skip: opts.skip ?? 0, take: opts.take ?? 50, orderBy: { createdAt: 'desc' } }),
       this.db.storageObject.count({ where }),
     ]);
-    return { objects, total };
+    return { objects: objects.map(toObjectResponse), total };
   }
 
   async getForOrg(orgId: string, bucketId: string, key: string) {
     await this.buckets.getForOrg(orgId, bucketId);
-    return this.findLatest(bucketId, key);
+    return toObjectResponse(await this.findLatest(bucketId, key));
   }
 
   async remove(orgId: string, bucketId: string, key: string): Promise<void> {

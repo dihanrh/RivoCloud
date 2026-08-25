@@ -8,6 +8,8 @@ import { AppModule } from '../app.module.js';
 import { IdentityClient } from '../auth/identity-client.js';
 import type { CombinedAuthContext } from '../auth/auth-context.decorator.js';
 
+const WEBHOOK_TOKEN = process.env.MINIO_WEBHOOK_AUTH_TOKEN ?? 'dev_minio_webhook_token_change_me';
+
 class FakeIdentityClient {
   nextAuth: CombinedAuthContext | null = null;
   async verifyToken(): Promise<CombinedAuthContext> {
@@ -124,5 +126,47 @@ describe('ObjectsController', () => {
       .delete(`/api/v1/buckets/${bucketId}/objects/whatever.txt`)
       .set('Authorization', 'Bearer whatever');
     expect(response.status).toBe(403);
+  });
+
+  // Regression test for the bug caught by Stage 5's manual e2e verification:
+  // GET-ing an object whose upload has actually completed (a real MinIO PUT,
+  // simulated here via the same webhook endpoint MinIO calls) 500'd, because
+  // NestJS's JSON.stringify-based response serialization can't handle the
+  // raw Prisma row's BigInt size. This drives the real HTTP GET route end to
+  // end — auth guard, controller, service, serialization — the same path a
+  // real client hits, and is the most direct proof the 500 is gone.
+  it('GETs an object with a completed upload without a 500, returning size as a string', async () => {
+    const { bucketId } = await seedOrgBucketAndAuth('owner');
+    const upload = await request(app.getHttpServer())
+      .post(`/api/v1/buckets/${bucketId}/objects/upload`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ key: 'done.txt' });
+
+    const pending = await prisma.storageObject.findUnique({ where: { id: upload.body.objectId } });
+    const physicalName = `rc-${bucketId}`;
+    const webhookResponse = await request(app.getHttpServer())
+      .post('/internal/storage/minio-webhook')
+      .set('Authorization', `Bearer ${WEBHOOK_TOKEN}`)
+      .send({
+        Records: [
+          {
+            eventName: 's3:ObjectCreated:Put',
+            s3: {
+              bucket: { name: physicalName },
+              object: { key: `done.txt%2F${pending!.versionId}`, size: 555, eTag: 'etag-done' },
+            },
+          },
+        ],
+      });
+    expect(webhookResponse.status).toBe(201);
+
+    const response = await request(app.getHttpServer())
+      .get(`/api/v1/buckets/${bucketId}/objects/done.txt`)
+      .set('Authorization', 'Bearer whatever');
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe('ready');
+    expect(typeof response.body.size).toBe('string');
+    expect(response.body.size).toBe('555');
   });
 });

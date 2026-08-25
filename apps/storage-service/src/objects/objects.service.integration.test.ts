@@ -4,6 +4,7 @@ import { NotFoundException } from '@nestjs/common';
 import { prisma } from '@rivocloud/db';
 import { Client as MinioClient } from 'minio';
 import { BucketsService } from '../buckets/buckets.service.js';
+import { physicalBucketName } from '../buckets/bucket-name.util.js';
 import { ObjectsService } from './objects.service.js';
 import { EventsService } from '../events/events.service.js';
 
@@ -20,6 +21,19 @@ async function seedOrgAndBucket(buckets: BucketsService, name = 'Test Bucket') {
   const org = await prisma.organization.create({ data: { name: 'Org', slug: `org-${randomUUID()}`, ownerId: user.id } });
   const bucket = await buckets.create(org.id, { name });
   return { org, bucket };
+}
+
+// Mirrors minio-webhook.controller.integration.test.ts's minioNotificationBody
+// helper, but shaped as the single `record` markUploaded() takes directly
+// (rather than the full webhook POST body), since these tests drive
+// ObjectsService directly instead of going through HTTP.
+function minioNotificationRecord(bucketPhysicalName: string, minioObjectKey: string, size: number, etag: string) {
+  return {
+    s3: {
+      bucket: { name: bucketPhysicalName },
+      object: { key: minioObjectKey.replace(/\//g, '%2F'), size, eTag: etag },
+    },
+  };
 }
 
 describe('ObjectsService', () => {
@@ -102,5 +116,43 @@ describe('ObjectsService', () => {
     });
 
     await expect(service.remove(otherOrg.id, bucket.id, 'mine.txt')).rejects.toThrow(NotFoundException);
+  });
+
+  // Regression test for the bug caught by Stage 5's manual e2e verification:
+  // once markUploaded() sets a real (non-null) BigInt size, getForOrg() must
+  // not hand that BigInt straight back — NestJS serializes responses with
+  // JSON.stringify, which throws "Do not know how to serialize a BigInt" for
+  // any raw Prisma row whose size is set. Every other test in this file only
+  // ever reads an object while it's still pending (size still null), which is
+  // exactly why this was never caught before real end-to-end testing.
+  it('returns object size as a numeric string (not a BigInt) once the upload has completed', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    const { objectId } = await service.initiateUpload(org.id, bucket.id, { key: 'real.txt' });
+    const pending = await prisma.storageObject.findUnique({ where: { id: objectId } });
+
+    await service.markUploaded(
+      minioNotificationRecord(physicalBucketName(bucket.id), `real.txt/${pending!.versionId}`, 12345, 'etag-real'),
+    );
+
+    const object = await service.getForOrg(org.id, bucket.id, 'real.txt');
+    expect(object.status).toBe('ready');
+    expect(typeof object.size).toBe('string');
+    expect(object.size).toBe('12345');
+  });
+
+  it('includes a numeric-string size for a completed upload in list() results', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    const { objectId } = await service.initiateUpload(org.id, bucket.id, { key: 'listed.txt' });
+    const pending = await prisma.storageObject.findUnique({ where: { id: objectId } });
+
+    await service.markUploaded(
+      minioNotificationRecord(physicalBucketName(bucket.id), `listed.txt/${pending!.versionId}`, 98765, 'etag-listed'),
+    );
+
+    const page = await service.list(org.id, bucket.id, { skip: 0, take: 50 });
+    const listed = page.objects.find((o) => o.key === 'listed.txt');
+    expect(listed).toBeDefined();
+    expect(typeof listed!.size).toBe('string');
+    expect(listed!.size).toBe('98765');
   });
 });
