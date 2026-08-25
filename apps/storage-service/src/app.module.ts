@@ -5,9 +5,10 @@ import { EventsModule } from './events/events.module.js';
 import { MinioModule } from './minio/minio.module.js';
 import { HealthController } from './health/health.controller.js';
 import { BucketsModule } from './buckets/buckets.module.js';
+import { ObjectsModule } from './objects/objects.module.js';
 
 @Module({
-  imports: [EnvModule, PrismaModule, EventsModule, MinioModule, BucketsModule],
+  imports: [EnvModule, PrismaModule, EventsModule, MinioModule, BucketsModule, ObjectsModule],
   controllers: [HealthController],
 })
 export class AppModule {}
