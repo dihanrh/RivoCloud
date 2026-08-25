@@ -82,4 +82,25 @@ describe('ObjectsService', () => {
     const { org, bucket } = await seedOrgAndBucket(buckets);
     await expect(service.getForOrg(org.id, bucket.id, 'missing.txt')).rejects.toThrow(NotFoundException);
   });
+
+  it('soft-deletes an object and best-effort removes it from MinIO', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    await service.initiateUpload(org.id, bucket.id, { key: 'to-delete.txt' });
+
+    await service.remove(org.id, bucket.id, 'to-delete.txt');
+
+    await expect(service.getForOrg(org.id, bucket.id, 'to-delete.txt')).rejects.toThrow(NotFoundException);
+  });
+
+  it('rejects deleting an object belonging to a different org', async () => {
+    const { org, bucket } = await seedOrgAndBucket(buckets);
+    await service.initiateUpload(org.id, bucket.id, { key: 'mine.txt' });
+
+    const otherUser = await prisma.user.create({ data: { email: `${randomUUID()}@example.com`, name: 'Other' } });
+    const otherOrg = await prisma.organization.create({
+      data: { name: 'Other Org', slug: `other-org-${randomUUID()}`, ownerId: otherUser.id },
+    });
+
+    await expect(service.remove(otherOrg.id, bucket.id, 'mine.txt')).rejects.toThrow(NotFoundException);
+  });
 });

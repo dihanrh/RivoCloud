@@ -1,9 +1,10 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth-guard.js';
 import { RequireStorageScope, StorageScopeGuard } from '../auth/storage-scope.guard.js';
 import { AuthCtx, type CombinedAuthContext } from '../auth/auth-context.decorator.js';
 import { ObjectsService } from './objects.service.js';
 import { InitiateUploadDto } from './dto/initiate-upload.dto.js';
+import { ListObjectsDto } from './dto/list-objects.dto.js';
 
 function requireOrgId(auth: CombinedAuthContext): string {
   if (!auth.orgId) {
@@ -29,23 +30,20 @@ export class ObjectsController {
 
   @Get()
   @RequireStorageScope('read')
-  list(
-    @AuthCtx() auth: CombinedAuthContext,
-    @Param('bucketId') bucketId: string,
-    @Query('prefix') prefix?: string,
-    @Query('skip') skip?: string,
-    @Query('take') take?: string,
-  ) {
-    return this.objects.list(requireOrgId(auth), bucketId, {
-      prefix,
-      skip: Number(skip) || 0,
-      take: Number(take) || 50,
-    });
+  list(@AuthCtx() auth: CombinedAuthContext, @Param('bucketId') bucketId: string, @Query() query: ListObjectsDto) {
+    return this.objects.list(requireOrgId(auth), bucketId, query);
   }
 
   @Get(':key')
   @RequireStorageScope('read')
   get(@AuthCtx() auth: CombinedAuthContext, @Param('bucketId') bucketId: string, @Param('key') key: string) {
     return this.objects.getForOrg(requireOrgId(auth), bucketId, key);
+  }
+
+  @Delete(':key')
+  @RequireStorageScope('delete')
+  async remove(@AuthCtx() auth: CombinedAuthContext, @Param('bucketId') bucketId: string, @Param('key') key: string) {
+    await this.objects.remove(requireOrgId(auth), bucketId, key);
+    return { success: true };
   }
 }

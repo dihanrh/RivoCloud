@@ -99,4 +99,30 @@ describe('ObjectsController', () => {
     expect(get.status).toBe(200);
     expect(get.body.status).toBe('pending');
   });
+
+  it('deletes an object', async () => {
+    const { bucketId } = await seedOrgBucketAndAuth('admin');
+    await request(app.getHttpServer())
+      .post(`/api/v1/buckets/${bucketId}/objects/upload`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ key: 'gone.txt' });
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/api/v1/buckets/${bucketId}/objects/gone.txt`)
+      .set('Authorization', 'Bearer whatever');
+    expect(deleted.status).toBe(200);
+
+    const getAfterDelete = await request(app.getHttpServer())
+      .get(`/api/v1/buckets/${bucketId}/objects/gone.txt`)
+      .set('Authorization', 'Bearer whatever');
+    expect(getAfterDelete.status).toBe(404);
+  });
+
+  it('rejects a developer with only storage:read from deleting', async () => {
+    const { bucketId } = await seedOrgBucketAndAuth('viewer');
+    const response = await request(app.getHttpServer())
+      .delete(`/api/v1/buckets/${bucketId}/objects/whatever.txt`)
+      .set('Authorization', 'Bearer whatever');
+    expect(response.status).toBe(403);
+  });
 });

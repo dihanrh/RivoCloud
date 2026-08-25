@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@rivocloud/db';
 import type { Client as MinioClient } from 'minio';
@@ -15,6 +15,8 @@ const PRESIGNED_UPLOAD_TTL_SECONDS = 15 * 60;
 
 @Injectable()
 export class ObjectsService {
+  private readonly logger = new Logger(ObjectsService.name);
+
   constructor(
     @Inject(PRISMA) private readonly db: PrismaClient,
     @Inject(MINIO) private readonly minio: MinioClient,
@@ -60,6 +62,24 @@ export class ObjectsService {
   async getForOrg(orgId: string, bucketId: string, key: string) {
     await this.buckets.getForOrg(orgId, bucketId);
     return this.findLatest(bucketId, key);
+  }
+
+  async remove(orgId: string, bucketId: string, key: string): Promise<void> {
+    await this.buckets.getForOrg(orgId, bucketId);
+    const object = await this.findLatest(bucketId, key);
+
+    await this.db.storageObject.update({ where: { id: object.id }, data: { status: 'deleted' } });
+
+    try {
+      const minioObjectKey = `${object.key}/${object.versionId}`;
+      await this.minio.removeObject(physicalBucketName(bucketId), minioObjectKey);
+    } catch (error) {
+      // Best-effort: the metadata row (already marked deleted, above) is the
+      // source of truth every other read in this service checks. A failed
+      // physical removal here just means bytes linger in MinIO a bit longer
+      // — documented, accepted window (Design Decision 6).
+      this.logger.warn(`failed to remove MinIO object for ${bucketId}/${key}: ${error}`);
+    }
   }
 
   private async findLatest(bucketId: string, key: string) {
