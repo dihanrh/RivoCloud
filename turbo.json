@@ -16,7 +16,7 @@
     },
     "test:integration": {
       "outputs": [],
-      "env": ["DATABASE_URL", "REDIS_URL", "NATS_URL", "JWT_PRIVATE_KEY_PATH", "JWT_PUBLIC_KEY_PATH", "INTERNAL_API_SECRET"]
+      "env": ["DATABASE_URL", "REDIS_URL", "NATS_URL", "JWT_PRIVATE_KEY_PATH", "JWT_PUBLIC_KEY_PATH", "INTERNAL_API_SECRET", "MINIO_URL", "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "MINIO_WEBHOOK_AUTH_TOKEN"]
     },
     "dev": {
       "cache": false,
