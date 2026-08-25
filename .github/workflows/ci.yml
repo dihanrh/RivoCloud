@@ -71,23 +71,6 @@ jobs:
         image: nats:2-alpine
         ports:
           - 4222:4222
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: rivocloud
-          MINIO_ROOT_PASSWORD: rivocloud_dev_password
-          MINIO_NOTIFY_WEBHOOK_ENABLE_STORAGE: "on"
-          MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE: "http://localhost:3004/internal/storage/minio-webhook"
-          MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_STORAGE: "ci_minio_webhook_token_placeholder"
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-        entrypoint: sh
-        command: -c "minio server /data"
     env:
       DATABASE_URL: postgresql://rivocloud:rivocloud_dev_password@localhost:5432/rivocloud
       REDIS_URL: redis://localhost:6379
@@ -99,6 +82,29 @@ jobs:
       MINIO_WEBHOOK_AUTH_TOKEN: ci_minio_webhook_token_placeholder
     steps:
       - uses: actions/checkout@v4
+      - name: Start MinIO
+        run: |
+          # Args are collected in an array (rather than one backslash-continued
+          # command) so the explanatory comment below can sit directly above the
+          # env var it documents without breaking shell line-continuation.
+          MINIO_ARGS=(
+            -d --name minio -p 9000:9000
+            -e MINIO_ROOT_USER=rivocloud
+            -e MINIO_ROOT_PASSWORD=rivocloud_dev_password
+            -e MINIO_NOTIFY_WEBHOOK_ENABLE_STORAGE=on
+            # This endpoint isn't actually reachable from inside the container (no
+            # test here relies on a real MinIO-initiated webhook delivery — every
+            # integration test POSTs the notification body directly to the running
+            # storage-service process instead). Only its ARN identifier (STORAGE)
+            # needs to exist server-side for setBucketNotification calls to succeed.
+            -e MINIO_NOTIFY_WEBHOOK_ENDPOINT_STORAGE=http://localhost:3004/internal/storage/minio-webhook
+            -e MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_STORAGE=ci_minio_webhook_token_placeholder
+          )
+          docker run "${MINIO_ARGS[@]}" minio/minio:latest server /data
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 2
+          done
       - uses: pnpm/action-setup@v4
         with:
           version: 9
