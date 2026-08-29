@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getEnv } from '@/lib/env';
+import { backendFetch, BackendError } from '@/lib/backend-fetch';
+import { applySessionCookies } from '@/lib/auth-session';
+import { decodeAccessToken } from '@/lib/jwt';
+import type { AuthTokens, Organization } from '@/lib/types';
+
+export async function POST(request: NextRequest) {
+  const body = await request.text();
+
+  try {
+    const tokens = (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/login', {
+      method: 'POST',
+      body,
+    })) as AuthTokens;
+
+    const decoded = decodeAccessToken(tokens.accessToken);
+    const org = decoded?.org ?? null;
+
+    let orgs: Organization[] | undefined;
+    if (!org) {
+      orgs = (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/orgs', {
+        accessToken: tokens.accessToken,
+      })) as Organization[];
+    }
+
+    const response = NextResponse.json({ org, orgs });
+    applySessionCookies(response, tokens);
+    return response;
+  } catch (err) {
+    if (err instanceof BackendError) {
+      return NextResponse.json(err.body ?? { message: 'Login failed' }, { status: err.status });
+    }
+    throw err;
+  }
+}
