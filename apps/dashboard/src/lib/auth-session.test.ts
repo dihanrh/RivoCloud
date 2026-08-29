@@ -44,7 +44,10 @@ describe('resolveSession', () => {
     const expired = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 - 100 });
     const freshAccess = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 + 900 });
     cookieStore.set(ACCESS_COOKIE, { value: expired });
-    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-abc' });
+    // Unique token per test: the refresh grace window (fix #3) keeps a settled
+    // result cached briefly, so reusing a token across tests in this file would
+    // let an earlier test's cached result leak into a later one.
+    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-token-resolve-1' });
 
     vi.stubGlobal(
       'fetch',
@@ -65,7 +68,7 @@ describe('resolveSession', () => {
   it('returns null when the refresh call fails', async () => {
     const expired = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 - 100 });
     cookieStore.set(ACCESS_COOKIE, { value: expired });
-    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-abc' });
+    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-token-resolve-2' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })));
 
     expect(await resolveSession()).toBeNull();
@@ -75,7 +78,7 @@ describe('resolveSession', () => {
     const expired = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 - 100 });
     const freshAccess = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 + 900 });
     cookieStore.set(ACCESS_COOKIE, { value: expired });
-    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-abc' });
+    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-token-resolve-3' });
 
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ accessToken: freshAccess, refreshToken: 'refresh-xyz' }), { status: 200 }),
@@ -92,6 +95,32 @@ describe('resolveSession', () => {
     };
     expect(session1).toEqual(expected);
     expect(session2).toEqual(expected);
+  });
+});
+
+describe('refreshTokens (post-settle grace window)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reuses the resolved result for a late arrival with the same token, without calling fetch again', async () => {
+    const freshAccess = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 + 900 });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ accessToken: freshAccess, refreshToken: 'refresh-xyz' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = await refreshTokens('refresh-token-grace-window');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Arrives shortly after the first refresh already settled — well within the
+    // grace window — and must NOT trigger a second network call (the first
+    // refresh token was already consumed/rotated by identity-service).
+    const second = await refreshTokens('refresh-token-grace-window');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(second).toEqual({ accessToken: freshAccess, refreshToken: 'refresh-xyz' });
   });
 });
 

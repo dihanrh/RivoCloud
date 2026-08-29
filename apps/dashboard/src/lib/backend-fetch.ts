@@ -14,17 +14,37 @@ export async function backendFetch(
   init: RequestInit & { accessToken?: string } = {},
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers,
-    },
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...rest,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...headers,
+      },
+    });
+  } catch {
+    // Network failure, DNS error, connection refused, aborted request, etc. — the
+    // backend was unreachable rather than returning an error response. Surface it
+    // as a BackendError (like any other backend failure) instead of letting the
+    // raw fetch error (TypeError/AbortError) escape and become an opaque 500.
+    throw new BackendError(502, { message: 'Unable to reach backend service' });
+  }
 
   const text = await response.text();
-  const body: unknown = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // Non-JSON body (e.g. an HTML error page from something in front of the
+      // backend) — fall back to the raw text rather than throwing a raw
+      // SyntaxError out of this function.
+      body = text;
+    }
+  }
 
   if (!response.ok) {
     throw new BackendError(response.status, body);

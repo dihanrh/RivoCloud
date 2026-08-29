@@ -38,4 +38,25 @@ describe('backendFetch', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
     expect(await backendFetch('http://svc', '/api/v1/thing')).toBeNull();
   });
+
+  it('falls back to the raw text when a non-2xx response body is not valid JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('<html>Bad Gateway</html>', { status: 502 })),
+    );
+
+    const err = await backendFetch('http://svc', '/api/v1/thing').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(BackendError);
+    expect(err).toMatchObject({ status: 502, body: '<html>Bad Gateway</html>' });
+  });
+
+  it('throws a BackendError with status 502 when the fetch call itself fails (network error)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+    const err = await backendFetch('http://svc', '/api/v1/thing').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(BackendError);
+    expect(err).toMatchObject({ status: 502, body: { message: 'Unable to reach backend service' } });
+  });
 });
