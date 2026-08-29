@@ -20,3 +20,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
   return body as T;
 }
+
+export function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    return (err.body as { message?: string } | null)?.message ?? fallback;
+  }
+  return fallback;
+}

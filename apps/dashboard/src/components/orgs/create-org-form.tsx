@@ -7,15 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createOrgSchema } from '@/lib/validation';
 import { useCreateOrg } from '@/hooks/use-create-org';
-import { useSelectOrg } from '@/hooks/use-select-org';
-import { ApiError } from '@/lib/http';
+import { errorMessage } from '@/lib/http';
 
 export function CreateOrgForm() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const createOrg = useCreateOrg();
-  const selectOrg = useSelectOrg();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -28,16 +26,14 @@ export function CreateOrgForm() {
     }
 
     try {
-      const { organization } = await createOrg.mutateAsync(parsed.data);
-      await selectOrg.mutateAsync(organization.id);
+      await createOrg.mutateAsync(parsed.data);
       router.push('/dashboard');
     } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Could not create organization') : 'Could not create organization';
-      setError(message);
+      setError(errorMessage(err, 'Could not create organization'));
     }
   }
 
-  const submitting = createOrg.isPending || selectOrg.isPending;
+  const submitting = createOrg.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
