@@ -1,6 +1,6 @@
 # RivoCloud — Phase 1 Product Requirements Document (PRD)
 
-**Status:** Draft — Stages 1-5 (Infrastructure Foundation, Identity Service, Go Edge Proxy, CDN Service, Storage Service) complete, Stages 6–16 not started.
+**Status:** Draft — Stages 1-6 (Infrastructure Foundation, Identity Service, Go Edge Proxy, CDN Service, Storage Service, Dashboard MVP: auth/zone/storage UI) complete, Stages 7–16 not started.
 **Owner:** RivoCloud engineering.
 **Companion documents:**
 - [`2026-06-29-revocloud-master-architecture.md`](2026-06-29-revocloud-master-architecture.md) — product vision, long-term strategy, technology decisions (the "why" behind the whole product).
@@ -148,7 +148,7 @@ The 16-stage build order from the EDD (Section 11, Development Order), unchanged
 | 3 | Go Edge Proxy (Basic) — HTTP server, Redis (L2), in-process LRU (L1) | 2 | ✅ Done | 1 | [`edge-proxy-and-caching.md`](../../concepts/edge-proxy-and-caching.md) |
 | 4 | CDN Service — zone CRUD, config publish to Redis | 2 | ✅ Done | 2, 3 | [`cdn-zones-and-configuration.md`](../../concepts/cdn-zones-and-configuration.md) |
 | 5 | Storage Service — bucket CRUD, presigned upload, MinIO webhook | 3 | ✅ Done | 2 | [`object-storage-and-uploads.md`](../../concepts/object-storage-and-uploads.md) |
-| 6 | Dashboard MVP — auth pages, zone UI, storage UI | 1–3 | Not started | 2, 4, 5 | [`dashboard-and-frontend.md`](../../concepts/dashboard-and-frontend.md) |
+| 6 | Dashboard MVP — auth pages, zone UI, storage UI | 1–3 | ✅ Done (6.1–6.3: auth, zone UI, storage UI) | 2, 4, 5 | [`dashboard-and-frontend.md`](../../concepts/dashboard-and-frontend.md) |
 | 7 | NATS Invalidation — cache invalidation + cache rules engine | 4 | Not started | 4 | [`cache-invalidation-and-messaging.md`](../../concepts/cache-invalidation-and-messaging.md) |
 | 8 | Custom Domains + TLS — Traefik Redis provider, DNS verification | 3 | Not started | 4 | [`custom-domains-and-tls.md`](../../concepts/custom-domains-and-tls.md) |
 | 9 | Analytics — edge events to NATS, ClickHouse ingestion, charts | 5 | Not started | 3, 6 | [`analytics-and-clickhouse.md`](../../concepts/analytics-and-clickhouse.md) |
