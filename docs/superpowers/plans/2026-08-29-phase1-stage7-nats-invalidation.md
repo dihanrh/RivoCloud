@@ -2233,8 +2233,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-
-	"rivocloud/edge-proxy/internal/globmatch"
 )
 
 // Redis is the L2 cache: shared by every Edge Proxy replica in a PoP
@@ -2323,7 +2321,7 @@ func (r *Redis) Purge(ctx context.Context, zoneID string, patterns []string, tag
 }
 ```
 
-(`globmatch` is imported by `memory.go`'s `matchesAny`, which `redis.go` also calls — both files are in package `cachestore`, so only one import of `globmatch` is needed across the package; `redis.go`'s own import list above can be trimmed if `go vet` flags it as unused, since `matchesAny` lives in `memory.go`.)
+(`matchesAny` lives in `memory.go`, which already imports `globmatch`; `redis.go` calls `matchesAny` directly and must NOT add its own `globmatch` import — both files are in package `cachestore`, so a second import would be flagged as unused and fail the build.)
 
 - [ ] **Step 8: Run test to verify it passes**
 
@@ -2653,7 +2651,7 @@ In `apps/edge-proxy/internal/proxy/handler.go`, add the import:
 	"rivocloud/edge-proxy/internal/cacherules"
 ```
 
-Replace the top of `ServeHTTP` (from the zone resolution through cache-key construction) with:
+Replace the **entire body** of `ServeHTTP` (every line from the zone resolution down to the final `writeEntry(w, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")`) with:
 
 ```go
 func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -2861,7 +2859,7 @@ func parseCacheTag(raw string) []string {
 }
 ```
 
-Update the two call sites of `buildEntry` (the 304-refresh path doesn't call it — only the fresh-body MISS path does, already shown above with `newEntry := buildEntry(result.response, body, result.decision, now, z.ID, r.URL.Path)`).
+`buildEntry` has exactly one call site, on the fresh-body MISS path (the 304-refresh path calls `refreshExpiry` instead, not `buildEntry`) — it's already updated to the new signature in the `ServeHTTP` replacement above (`newEntry := buildEntry(result.response, body, result.decision, now, z.ID, r.URL.Path)`); no separate edit is needed here.
 
 Finally, update `writeEntry` to honor `entry.BrowserTTL` when set:
 
