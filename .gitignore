@@ -9,3 +9,6 @@ packages/db/generated/
 packages/db/src/generated/
 coverage/
 *.pem
+.next/
+next-env.d.ts
+*.tsbuildinfo
