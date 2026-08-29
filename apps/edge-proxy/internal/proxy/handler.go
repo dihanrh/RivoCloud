@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"rivocloud/edge-proxy/internal/cachekey"
+	"rivocloud/edge-proxy/internal/cacherules"
 	"rivocloud/edge-proxy/internal/cachestore"
 	"rivocloud/edge-proxy/internal/compress"
 	"rivocloud/edge-proxy/internal/httpcache"
@@ -57,7 +58,20 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := cachekey.Build(z.ID, cachekey.NormalizeMethod(r.Method), r.Host, r.URL.Path, r.URL.RawQuery, "include_all", nil)
+	rule, ruleMatched := cacherules.Match(z.Rules, r.URL.Path)
+	// A bypass/no-store rule (EDD Section 5.3, Priority 1) means "never
+	// cache this," which is exactly what the uncached passthrough path
+	// already does — no separate non-caching branch needed.
+	if ruleMatched && (rule.Action == "bypass" || rule.Action == "no-store") {
+		h.proxyUncached(w, r, z)
+		return
+	}
+
+	queryMode, queryWhitelist := "include_all", []string(nil)
+	if ruleMatched {
+		queryMode, queryWhitelist = rule.QueryString, rule.QueryWhitelist
+	}
+	key := cachekey.Build(z.ID, cachekey.NormalizeMethod(r.Method), r.Host, r.URL.Path, r.URL.RawQuery, queryMode, queryWhitelist)
 	now := h.now()
 
 	entry, hitLayerIdx, found := h.lookup(r.Context(), key, now)
@@ -71,10 +85,21 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if found {
 		etag = entry.ETag
 	}
+	var ruleTTLOverride *time.Duration
+	var ruleBrowserTTLOverride *time.Duration
+	if ruleMatched && rule.EdgeTTL != nil {
+		d := time.Duration(*rule.EdgeTTL) * time.Second
+		ruleTTLOverride = &d
+	}
+	if ruleMatched && rule.BrowserTTL != nil {
+		d := time.Duration(*rule.BrowserTTL) * time.Second
+		ruleBrowserTTLOverride = &d
+	}
 	result, err := h.fetchOrigin(r, z, originRequest{
 		method:           http.MethodGet,
 		ifNoneMatch:      etag,
 		ownsRevalidation: true,
+		ttlOverride:      ruleTTLOverride,
 	})
 	if err != nil {
 		if found && entry.UsableAsStale(now) {
@@ -97,6 +122,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		refreshed := refreshExpiry(entry, result.decision, now)
+		refreshed.BrowserTTL = ruleBrowserTTLOverride
 		if result.decision.Cacheable {
 			h.store(r.Context(), key, refreshed)
 		}
@@ -110,7 +136,8 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error reading origin response", http.StatusBadGateway)
 		return
 	}
-	newEntry := buildEntry(result.response, body, result.decision, now)
+	newEntry := buildEntry(result.response, body, result.decision, now, z.ID, r.URL.Path)
+	newEntry.BrowserTTL = ruleBrowserTTLOverride
 	if result.decision.Cacheable {
 		h.store(r.Context(), key, newEntry)
 	}
@@ -177,6 +204,11 @@ type originRequest struct {
 	// a PUT, an If-Range on a Range request) and stripping them would be a
 	// correctness bug in its own right.
 	ownsRevalidation bool
+	// ttlOverride, when set (a matched cache rule's edgeTtl), replaces
+	// Decide's origin-header-derived TTL outright — EDD Section 5.3,
+	// Priority 1: a cache rule is not a clamp on the origin's own
+	// Cache-Control, it supersedes it entirely.
+	ttlOverride *time.Duration
 }
 
 func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec originRequest) (*originResult, error) {
@@ -218,11 +250,13 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 
 	if resp.StatusCode == http.StatusNotModified {
 		decision := httpcache.Decide(resp.Header, z.DefaultTTL, h.now())
+		applyTTLOverride(&decision, spec.ttlOverride)
 		resp.Body.Close()
 		return &originResult{notModified: true, decision: decision}, nil
 	}
 
 	decision := httpcache.Decide(resp.Header, z.DefaultTTL, h.now())
+	applyTTLOverride(&decision, spec.ttlOverride)
 	// Decide only reads freshness directives. Storable applies the gates that
 	// no Cache-Control can override — status code, an unhonorable Vary, and
 	// an authenticated request without an explicit "public". Zeroing the
@@ -232,6 +266,18 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 		decision = httpcache.Decision{Cacheable: false}
 	}
 	return &originResult{response: resp, decision: decision}, nil
+}
+
+// applyTTLOverride replaces decision's TTL with override when a cache rule
+// matched, leaving StaleIfErrorTTL (not part of any cache_rules field) and
+// Cacheable untouched.
+func applyTTLOverride(decision *httpcache.Decision, override *time.Duration) {
+	if override == nil {
+		return
+	}
+	decision.Cacheable = true
+	decision.TTL = *override
+	decision.MustRevalidate = false
 }
 
 // lookup scans the layers fastest-to-slowest and returns the first FRESH copy
@@ -346,11 +392,13 @@ func (h *CachingHandler) now() time.Time {
 	return time.Now()
 }
 
-func buildEntry(resp *http.Response, body []byte, decision httpcache.Decision, now time.Time) cachestore.Entry {
+func buildEntry(resp *http.Response, body []byte, decision httpcache.Decision, now time.Time, zoneID, path string) cachestore.Entry {
 	header := resp.Header.Clone()
+	tags := parseCacheTag(header.Get("Cache-Tag"))
 	header.Del("Cache-Control")
 	header.Del("Expires")
 	header.Del("ETag")
+	header.Del("Cache-Tag")
 	header.Del("Content-Length")
 	header.Del("Connection")
 	header.Del("Transfer-Encoding")
@@ -366,7 +414,27 @@ func buildEntry(resp *http.Response, body []byte, decision httpcache.Decision, n
 		StoredAt:   now,
 		ExpiresAt:  now.Add(decision.TTL),
 		StaleUntil: now.Add(decision.TTL).Add(decision.StaleIfErrorTTL),
+		ZoneID:     zoneID,
+		Path:       path,
+		Tags:       tags,
 	}
+}
+
+// parseCacheTag reads the Cache-Tag origin response header (a small,
+// deliberately minimal tagging convention — see the plan's Design Decisions
+// #1) into a clean tag list.
+func parseCacheTag(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	tags := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			tags = append(tags, trimmed)
+		}
+	}
+	return tags
 }
 
 func refreshExpiry(entry cachestore.Entry, decision httpcache.Decision, now time.Time) cachestore.Entry {
@@ -383,6 +451,9 @@ func writeEntry(w http.ResponseWriter, r *http.Request, entry cachestore.Entry, 
 		}
 	}
 	remaining := entry.ExpiresAt.Sub(now)
+	if entry.BrowserTTL != nil {
+		remaining = *entry.BrowserTTL
+	}
 	w.Header().Set("Cache-Control", httpcache.BrowserCacheControl(httpcache.Decision{Cacheable: entry.Cacheable}, remaining))
 	// Announce the edge's own encoding negotiation, but never at the cost of
 	// the origin's Vary: a response varying by anything else is relayed with
