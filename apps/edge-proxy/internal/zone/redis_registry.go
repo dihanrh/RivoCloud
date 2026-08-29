@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"rivocloud/edge-proxy/internal/cacherules"
 )
 
 // redisConfig mirrors the JSON the CDN Service writes to zone_config:{id}
@@ -21,6 +23,19 @@ type redisConfig struct {
 	CacheTTL       int    `json:"cacheTtl"`
 	BrowserTTL     int    `json:"browserTtl"`
 	Enabled        bool   `json:"enabled"`
+}
+
+// redisRule mirrors one element of the JSON array the CDN Service writes to
+// zone_rules:{zoneId} (apps/cdn-service/src/rules/rules-config.publisher.ts).
+type redisRule struct {
+	Pattern        string   `json:"pattern"`
+	PatternType    string   `json:"patternType"`
+	Action         string   `json:"action"`
+	EdgeTTL        *int     `json:"edgeTtl"`
+	BrowserTTL     *int     `json:"browserTtl"`
+	QueryString    string   `json:"queryString"`
+	QueryWhitelist []string `json:"queryWhitelist"`
+	Priority       int      `json:"priority"`
 }
 
 type hostEntry struct {
@@ -132,6 +147,7 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 			log.Printf("zone: bad zone_config JSON for %q: %v", zoneID, jsonErr)
 		} else if rc.Enabled {
 			cfg = Config{ID: rc.ID, OriginURL: rc.OriginURL, DefaultTTL: time.Duration(rc.CacheTTL) * time.Second}
+			cfg.Rules = r.resolveRules(ctx, zoneID)
 			found = true
 		}
 	case !errors.Is(err, redis.Nil):
@@ -142,4 +158,37 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 	r.zoneConfig[zoneID] = configEntry{cfg: cfg, found: found, expiresAt: time.Now().Add(r.ttl)}
 	r.mu.Unlock()
 	return cfg, found
+}
+
+// resolveRules reads zone_rules:{zoneID} (written by the CDN Service's
+// RulesConfigPublisher on every rule mutation) and returns them pre-sorted
+// highest-priority-first. A missing key or a JSON error yields no rules —
+// never blocking config resolution on the rules read.
+func (r *RedisRegistry) resolveRules(ctx context.Context, zoneID string) []cacherules.Rule {
+	raw, err := r.client.Get(ctx, "zone_rules:"+zoneID).Result()
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			log.Printf("zone: zone_rules lookup error for %q: %v", zoneID, err)
+		}
+		return nil
+	}
+	var parsed []redisRule
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		log.Printf("zone: bad zone_rules JSON for %q: %v", zoneID, err)
+		return nil
+	}
+	rules := make([]cacherules.Rule, len(parsed))
+	for i, p := range parsed {
+		rules[i] = cacherules.Rule{
+			Pattern:        p.Pattern,
+			PatternType:    p.PatternType,
+			Action:         p.Action,
+			EdgeTTL:        p.EdgeTTL,
+			BrowserTTL:     p.BrowserTTL,
+			QueryString:    p.QueryString,
+			QueryWhitelist: p.QueryWhitelist,
+			Priority:       p.Priority,
+		}
+	}
+	return cacherules.SortByPriorityDesc(rules)
 }
