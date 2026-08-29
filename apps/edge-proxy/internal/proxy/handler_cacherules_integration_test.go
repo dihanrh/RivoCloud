@@ -87,6 +87,55 @@ func TestHandler_CacheRuleOverridesOriginTTL(t *testing.T) {
 	}
 }
 
+func TestHandler_BypassRuleMatchesPathCaseInsensitively(t *testing.T) {
+	origin := &countingOrigin{status: http.StatusOK, body: []byte("dynamic"), headers: http.Header{"Cache-Control": {"max-age=3600"}}}
+	zones := zone.NewStaticRegistry([]zone.Config{{
+		ID: "z1", Host: "cdn.test", OriginURL: "http://origin.test", DefaultTTL: time.Hour,
+		Rules: []cacherules.Rule{{Pattern: "/api/*", PatternType: "glob", Action: "bypass", Priority: 10}},
+	}})
+	memory, _ := cachestore.NewMemory(10)
+	h := &CachingHandler{Zones: zones, Layers: []cachestore.Layer{memory}, Origin: origin}
+
+	req := httptest.NewRequest(http.MethodGet, "http://cdn.test/API/users", nil)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "http://cdn.test/API/users", nil))
+
+	if origin.calls != 2 {
+		t.Fatalf("expected a bypass rule for /api/* to match /API/users case-insensitively and hit the origin every time, got %d calls", origin.calls)
+	}
+
+	// Belt-and-suspenders: cachekey.Build itself lowercases the path, so a
+	// bug here wouldn't just skip the bypass rule — it would also cache the
+	// mixed-case request's dynamic response under the SAME key a lowercase
+	// "/api/users" request would use.
+	key := cachekey.Build("z1", "GET", "cdn.test", "/API/users", "", "include_all", nil)
+	if _, ok, _ := memory.Get(req.Context(), key); ok {
+		t.Fatal("expected the mixed-case bypassed path to never be cached")
+	}
+}
+
+func TestHandler_EntryPathIsStoredLowercasedMatchingCacheKeyNormalization(t *testing.T) {
+	origin := &countingOrigin{status: http.StatusOK, body: []byte("post"), headers: http.Header{"Cache-Control": {"max-age=3600"}}}
+	zones := zone.NewStaticRegistry([]zone.Config{{ID: "z1", Host: "cdn.test", OriginURL: "http://origin.test", DefaultTTL: time.Hour}})
+	memory, _ := cachestore.NewMemory(10)
+	h := &CachingHandler{Zones: zones, Layers: []cachestore.Layer{memory}, Origin: origin}
+
+	req := httptest.NewRequest(http.MethodGet, "http://cdn.test/Posts/1", nil)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+
+	// cachekey.Build lowercases the path internally, so the entry must be
+	// findable under the LOWERCASED key even though the request path itself
+	// was mixed-case.
+	key := cachekey.Build("z1", "GET", "cdn.test", "/Posts/1", "", "include_all", nil)
+	entry, ok, _ := memory.Get(req.Context(), key)
+	if !ok {
+		t.Fatal("expected an entry to be stored under the cache key's own lowercased normalization")
+	}
+	if entry.Path != "/posts/1" {
+		t.Fatalf("expected Entry.Path to be lowercased to match the cache key's normalization (so a future purge glob-matches the same bytes), got %q", entry.Path)
+	}
+}
+
 func TestHandler_PopulatesZoneIDAndPathAndTagsFromCacheTagHeader(t *testing.T) {
 	origin := &countingOrigin{status: http.StatusOK, body: []byte("post"), headers: http.Header{
 		"Cache-Control": {"max-age=3600"},

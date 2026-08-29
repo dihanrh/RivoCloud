@@ -58,7 +58,16 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, ruleMatched := cacherules.Match(z.Rules, r.URL.Path)
+	// Normalized once and reused for both rule-matching and the stored
+	// Entry.Path: cachekey.Build lowercases the path internally when hashing
+	// the cache key, so matching cache rules against the RAW path would let
+	// "/API/users" dodge a "/api/*" bypass rule while still sharing a cache
+	// key (and now an Entry.Path, which a future purge will glob-match
+	// against) with "/api/users" — silently caching a response that should
+	// never have been cached, under a key an unrelated case variant can hit.
+	normalizedPath := strings.ToLower(r.URL.Path)
+
+	rule, ruleMatched := cacherules.Match(z.Rules, normalizedPath)
 	// A bypass/no-store rule (EDD Section 5.3, Priority 1) means "never
 	// cache this," which is exactly what the uncached passthrough path
 	// already does — no separate non-caching branch needed.
@@ -136,7 +145,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error reading origin response", http.StatusBadGateway)
 		return
 	}
-	newEntry := buildEntry(result.response, body, result.decision, now, z.ID, r.URL.Path)
+	newEntry := buildEntry(result.response, body, result.decision, now, z.ID, normalizedPath)
 	newEntry.BrowserTTL = ruleBrowserTTLOverride
 	if result.decision.Cacheable {
 		h.store(r.Context(), key, newEntry)
@@ -269,8 +278,17 @@ func (h *CachingHandler) fetchOrigin(r *http.Request, z zone.Config, spec origin
 }
 
 // applyTTLOverride replaces decision's TTL with override when a cache rule
-// matched, leaving StaleIfErrorTTL (not part of any cache_rules field) and
-// Cacheable untouched.
+// matched, leaving StaleIfErrorTTL untouched (it's not part of any
+// cache_rules field). It also unconditionally forces Cacheable = true and
+// clears MustRevalidate — deliberately, not an oversight: a matched cache
+// rule's edgeTtl overrides the origin-header TTL priority chain outright,
+// not as a clamp on it (plan Design Decision 5), so it takes precedence even
+// over an origin that said "no-store" or "private". This is the familiar
+// CDN "operator force-cache" pattern — a rule wins over the origin's own
+// wishes for the paths it covers. The 200-branch caller still runs
+// Storable() afterward, so a status code, an unhonorable Vary, or an
+// unauthenticated request can still veto storage even with a TTL override in
+// play; only the origin's own Cache-Control is what a matched rule bypasses.
 func applyTTLOverride(decision *httpcache.Decision, override *time.Duration) {
 	if override == nil {
 		return
