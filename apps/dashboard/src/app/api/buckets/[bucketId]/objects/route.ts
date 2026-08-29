@@ -8,5 +8,8 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { bucketId } = await params;
-  return proxyToBackend(getEnv().STORAGE_SERVICE_URL, `/api/v1/buckets/${bucketId}/objects${request.nextUrl.search}`);
+  return proxyToBackend(
+    getEnv().STORAGE_SERVICE_URL,
+    `/api/v1/buckets/${encodeURIComponent(bucketId)}/objects${request.nextUrl.search}`,
+  );
 }

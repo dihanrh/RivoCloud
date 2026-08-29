@@ -8,16 +8,16 @@ interface RouteParams {
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { zoneId } = await params;
-  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${zoneId}`);
+  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${encodeURIComponent(zoneId)}`);
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { zoneId } = await params;
   const body = await request.text();
-  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${zoneId}`, { method: 'PATCH', body });
+  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${encodeURIComponent(zoneId)}`, { method: 'PATCH', body });
 }
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const { zoneId } = await params;
-  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${zoneId}`, { method: 'DELETE' });
+  return proxyToBackend(getEnv().CDN_SERVICE_URL, `/api/v1/zones/${encodeURIComponent(zoneId)}`, { method: 'DELETE' });
 }
