@@ -18,12 +18,12 @@ export interface SessionResult {
   newTokens: AuthTokens | null;
 }
 
-let inFlightRefresh: { refreshToken: string; promise: Promise<AuthTokens | null> } | null = null;
+const inFlightRefreshes = new Map<string, Promise<AuthTokens | null>>();
 
-async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
-  if (inFlightRefresh?.refreshToken === refreshToken) {
-    return inFlightRefresh.promise;
-  }
+export async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
+  const existing = inFlightRefreshes.get(refreshToken);
+  if (existing) return existing;
+
   const promise = (async () => {
     try {
       return (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/refresh', {
@@ -33,10 +33,10 @@ async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
     } catch {
       return null;
     } finally {
-      inFlightRefresh = null;
+      inFlightRefreshes.delete(refreshToken);
     }
   })();
-  inFlightRefresh = { refreshToken, promise };
+  inFlightRefreshes.set(refreshToken, promise);
   return promise;
 }
 
