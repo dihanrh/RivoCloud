@@ -70,4 +70,27 @@ describe('resolveSession', () => {
 
     expect(await resolveSession()).toBeNull();
   });
+
+  it('de-dups concurrent refresh calls for the same refresh token into a single network call', async () => {
+    const expired = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 - 100 });
+    const freshAccess = fakeJwt({ sub: 'u1', org: 'org-1', exp: Date.now() / 1000 + 900 });
+    cookieStore.set(ACCESS_COOKIE, { value: expired });
+    cookieStore.set(REFRESH_COOKIE, { value: 'refresh-abc' });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ accessToken: freshAccess, refreshToken: 'refresh-xyz' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const [session1, session2] = await Promise.all([resolveSession(), resolveSession()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const expected = {
+      accessToken: freshAccess,
+      org: 'org-1',
+      newTokens: { accessToken: freshAccess, refreshToken: 'refresh-xyz' },
+    };
+    expect(session1).toEqual(expected);
+    expect(session2).toEqual(expected);
+  });
 });

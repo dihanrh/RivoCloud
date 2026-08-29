@@ -18,6 +18,28 @@ export interface SessionResult {
   newTokens: AuthTokens | null;
 }
 
+let inFlightRefresh: { refreshToken: string; promise: Promise<AuthTokens | null> } | null = null;
+
+async function refreshTokens(refreshToken: string): Promise<AuthTokens | null> {
+  if (inFlightRefresh?.refreshToken === refreshToken) {
+    return inFlightRefresh.promise;
+  }
+  const promise = (async () => {
+    try {
+      return (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      })) as AuthTokens;
+    } catch {
+      return null;
+    } finally {
+      inFlightRefresh = null;
+    }
+  })();
+  inFlightRefresh = { refreshToken, promise };
+  return promise;
+}
+
 export async function resolveSession(): Promise<SessionResult | null> {
   const store = await cookies();
   const access = store.get(ACCESS_COOKIE)?.value;
@@ -30,16 +52,11 @@ export async function resolveSession(): Promise<SessionResult | null> {
 
   if (!refresh) return null;
 
-  try {
-    const tokens = (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken: refresh }),
-    })) as AuthTokens;
-    const newDecoded = decodeAccessToken(tokens.accessToken);
-    return { accessToken: tokens.accessToken, org: newDecoded?.org ?? null, newTokens: tokens };
-  } catch {
-    return null;
-  }
+  const tokens = await refreshTokens(refresh);
+  if (!tokens) return null;
+
+  const newDecoded = decodeAccessToken(tokens.accessToken);
+  return { accessToken: tokens.accessToken, org: newDecoded?.org ?? null, newTokens: tokens };
 }
 
 export function applySessionCookies(response: NextResponse, tokens: AuthTokens): void {
