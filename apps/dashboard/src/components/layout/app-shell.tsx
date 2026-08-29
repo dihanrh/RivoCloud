@@ -18,8 +18,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: me } = useMe();
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.push('/login');
+    }
   }
 
   return (

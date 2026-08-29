@@ -22,7 +22,19 @@ export default function BucketDetailPage({ params }: { params: Promise<{ bucketI
       </div>
       {isLoading && <Skeleton className="h-40 w-full" />}
       {error && <p className="text-destructive">Failed to load objects.</p>}
-      {data && <ObjectBrowser objects={data.objects} onDelete={(key) => deleteObject.mutate(key)} />}
+      {data && (
+        <ObjectBrowser
+          objects={data.objects}
+          onDelete={async (key) => {
+            if (!window.confirm(`Delete "${key}"? This cannot be undone.`)) return;
+            try {
+              await deleteObject.mutateAsync(key);
+            } catch {
+              window.alert('Failed to delete the file. Please try again.');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

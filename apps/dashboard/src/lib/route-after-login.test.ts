@@ -15,6 +15,28 @@ describe('routeAfterLogin', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it('redirects to the ?next= deep link when an org is already selected and next is a safe relative path', async () => {
+    const router = { push: vi.fn() };
+    await routeAfterLogin({ org: 'org-1' }, router as never, '/zones/abc');
+    expect(router.push).toHaveBeenCalledWith('/zones/abc');
+  });
+
+  it('falls back to /dashboard when next is not a safe relative path (open-redirect guard)', async () => {
+    const router = { push: vi.fn() };
+    await routeAfterLogin({ org: 'org-1' }, router as never, 'https://evil.example.com');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
+
+    router.push.mockClear();
+    await routeAfterLogin({ org: 'org-1' }, router as never, '//evil.example.com');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('ignores next when the user has zero organizations (onboarding takes priority)', async () => {
+    const router = { push: vi.fn() };
+    await routeAfterLogin({ org: null, orgs: [] }, router as never, '/zones/abc');
+    expect(router.push).toHaveBeenCalledWith('/orgs/new');
+  });
+
   it('goes to /orgs/new when the user has zero organizations', async () => {
     const router = { push: vi.fn() };
     await routeAfterLogin({ org: null, orgs: [] }, router as never);
