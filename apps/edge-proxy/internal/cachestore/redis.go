@@ -46,3 +46,50 @@ func (r *Redis) Set(ctx context.Context, key string, entry Entry) error {
 	}
 	return r.client.Set(ctx, r.prefix+key, raw, ttl).Err()
 }
+
+// Purge implements the EDD's Section 4.4 flow literally: "SCAN Redis for
+// matching keys → delete." There is no secondary path/tag index — this
+// service's own keys (prefix-scoped) are enumerated, each fetched and
+// filtered by ZoneID/Path/Tags, and matches deleted. SCAN is safe to run
+// against a live Redis (non-blocking, cursor-based), and at Phase 1's
+// single-PoP scale the total key count this walks is small.
+func (r *Redis) Purge(ctx context.Context, zoneID string, patterns []string, tags []string) (int, error) {
+	if len(patterns) == 0 && len(tags) == 0 {
+		return 0, nil
+	}
+	purged := 0
+	var cursor uint64
+	for {
+		keys, next, err := r.client.Scan(ctx, cursor, r.prefix+"*", 200).Result()
+		if err != nil {
+			return purged, err
+		}
+		for _, redisKey := range keys {
+			raw, err := r.client.Get(ctx, redisKey).Bytes()
+			if errors.Is(err, redis.Nil) {
+				continue // deleted between SCAN and GET; nothing to purge
+			}
+			if err != nil {
+				return purged, err
+			}
+			var entry Entry
+			if err := json.Unmarshal(raw, &entry); err != nil {
+				continue
+			}
+			if entry.ZoneID != zoneID {
+				continue
+			}
+			if matchesAny(entry, patterns, tags) {
+				if err := r.client.Del(ctx, redisKey).Err(); err != nil {
+					return purged, err
+				}
+				purged++
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			break
+		}
+	}
+	return purged, nil
+}
