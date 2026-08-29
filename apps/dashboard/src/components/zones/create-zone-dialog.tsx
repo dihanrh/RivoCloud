@@ -4,10 +4,18 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { createZoneSchema } from '@/lib/validation';
 import { useCreateZone } from '@/hooks/use-create-zone';
-import { ApiError } from '@/lib/http';
+import { errorMessage } from '@/lib/http';
 
 export function CreateZoneDialog() {
   const [open, setOpen] = useState(false);
@@ -32,8 +40,7 @@ export function CreateZoneDialog() {
       setName('');
       setOriginUrl('');
     } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Could not create zone') : 'Could not create zone';
-      setError(message);
+      setError(errorMessage(err, 'Could not create zone'));
     }
   }
 
@@ -45,6 +52,7 @@ export function CreateZoneDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create a pull zone</DialogTitle>
+          <DialogDescription>Enter a name and origin URL to create a new zone.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">

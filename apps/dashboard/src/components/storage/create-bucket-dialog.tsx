@@ -4,10 +4,18 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { createBucketSchema } from '@/lib/validation';
 import { useCreateBucket } from '@/hooks/use-create-bucket';
-import { ApiError } from '@/lib/http';
+import { errorMessage } from '@/lib/http';
 
 export function CreateBucketDialog() {
   const [open, setOpen] = useState(false);
@@ -30,8 +38,7 @@ export function CreateBucketDialog() {
       setOpen(false);
       setName('');
     } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Could not create bucket') : 'Could not create bucket';
-      setError(message);
+      setError(errorMessage(err, 'Could not create bucket'));
     }
   }
 
@@ -43,6 +50,7 @@ export function CreateBucketDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create a bucket</DialogTitle>
+          <DialogDescription>Choose a name for your new bucket.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">

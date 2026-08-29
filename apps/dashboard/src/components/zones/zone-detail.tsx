@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { updateZoneSchema } from '@/lib/validation';
 import { useUpdateZone } from '@/hooks/use-update-zone';
 import { useDeleteZone } from '@/hooks/use-delete-zone';
-import { ApiError } from '@/lib/http';
+import { errorMessage } from '@/lib/http';
 import type { Zone } from '@/lib/types';
 
 export function ZoneDetail({ zone }: { zone: Zone }) {
@@ -33,8 +33,7 @@ export function ZoneDetail({ zone }: { zone: Zone }) {
     try {
       await updateZone.mutateAsync(parsed.data);
     } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Could not save zone') : 'Could not save zone';
-      setError(message);
+      setError(errorMessage(err, 'Could not save zone'));
     }
   }
 

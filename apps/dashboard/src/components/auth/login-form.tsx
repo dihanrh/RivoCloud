@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiFetch, ApiError } from '@/lib/http';
+import { apiFetch, errorMessage } from '@/lib/http';
 import { loginSchema } from '@/lib/validation';
 import type { Organization } from '@/lib/types';
 
@@ -37,8 +37,7 @@ export function LoginForm({ onSuccess }: { onSuccess: (result: LoginResult) => v
       });
       onSuccess(result);
     } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Login failed') : 'Login failed';
-      setError(message);
+      setError(errorMessage(err, 'Login failed'));
     } finally {
       setSubmitting(false);
     }

@@ -1,14 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiFetch, ApiError } from '@/lib/http';
+import { apiFetch, errorMessage } from '@/lib/http';
 import { registerSchema } from '@/lib/validation';
 import type { LoginResult } from './login-form';
 
 export function RegisterForm({ onSuccess }: { onSuccess: (result: LoginResult) => void }) {
+  const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,16 +28,27 @@ export function RegisterForm({ onSuccess }: { onSuccess: (result: LoginResult) =
     }
 
     setSubmitting(true);
+
     try {
       await apiFetch('/api/auth/register', { method: 'POST', body: JSON.stringify(parsed.data) });
+    } catch (err) {
+      setError(errorMessage(err, 'Registration failed'));
+      setSubmitting(false);
+      return;
+    }
+
+    try {
       const loginResult = await apiFetch<LoginResult>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
       });
       onSuccess(loginResult);
-    } catch (err) {
-      const message = err instanceof ApiError ? ((err.body as { message?: string })?.message ?? 'Registration failed') : 'Registration failed';
-      setError(message);
+    } catch {
+      // The account was created successfully; only the immediate follow-up login failed.
+      // Send the user to /login instead of showing a generic error that invites a
+      // re-submit (which would now fail with "email already exists").
+      setError('Account created — please log in.');
+      router.push('/login');
     } finally {
       setSubmitting(false);
     }
