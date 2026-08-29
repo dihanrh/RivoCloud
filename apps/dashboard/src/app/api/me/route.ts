@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getEnv } from '@/lib/env';
-import { resolveSession } from '@/lib/auth-session';
+import { applySessionCookies, resolveSession } from '@/lib/auth-session';
 import { backendFetch, BackendError } from '@/lib/backend-fetch';
 
 export async function GET() {
@@ -11,10 +11,14 @@ export async function GET() {
     const profile = await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/users/me', {
       accessToken: session.accessToken,
     });
-    return NextResponse.json({ ...(profile as object), orgId: session.org });
+    const response = NextResponse.json({ ...(profile as object), orgId: session.org });
+    if (session.newTokens) applySessionCookies(response, session.newTokens);
+    return response;
   } catch (err) {
     if (err instanceof BackendError) {
-      return NextResponse.json(err.body ?? { message: 'Failed to load profile' }, { status: err.status });
+      const response = NextResponse.json(err.body ?? { message: 'Failed to load profile' }, { status: err.status });
+      if (session.newTokens) applySessionCookies(response, session.newTokens);
+      return response;
     }
     throw err;
   }
