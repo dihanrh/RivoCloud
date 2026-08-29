@@ -2,17 +2,9 @@ import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.
 import { apiFetch } from './http';
 import type { LoginResult } from '@/components/auth/login-form';
 
-export async function routeAfterLogin(
-  result: LoginResult,
-  router: AppRouterInstance,
-  next?: string | null,
-): Promise<void> {
+export async function routeAfterLogin(result: LoginResult, router: AppRouterInstance): Promise<void> {
   if (result.org) {
-    // Only honor the deep-link redirect once the user already has an org selected —
-    // the zero-org and multi-org branches below are prerequisite onboarding/selection
-    // steps that must run first regardless of where the user was headed.
-    const isSafeRelativePath = typeof next === 'string' && next.startsWith('/') && !next.startsWith('//');
-    router.push(isSafeRelativePath ? next : '/dashboard');
+    router.push('/dashboard');
     return;
   }
 
