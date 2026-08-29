@@ -50,4 +50,28 @@ describe('ZoneScopeGuard', () => {
     const { context, reflector } = contextWith(auth, 'delete');
     expect(() => new ZoneScopeGuard(reflector).canActivate(context)).toThrow(ForbiddenException);
   });
+
+  it('allows a developer role to invalidate', () => {
+    const auth: CombinedAuthContext = { type: 'jwt', userId: 'u1', orgId: 'o1', role: 'developer' };
+    const { context, reflector } = contextWith(auth, 'invalidate');
+    expect(new ZoneScopeGuard(reflector).canActivate(context)).toBe(true);
+  });
+
+  it('rejects a viewer role trying to invalidate', () => {
+    const auth: CombinedAuthContext = { type: 'jwt', userId: 'u1', orgId: 'o1', role: 'viewer' };
+    const { context, reflector } = contextWith(auth, 'invalidate');
+    expect(() => new ZoneScopeGuard(reflector).canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('requires the cache:invalidate scope (not zone:invalidate) for an API key', () => {
+    const auth: CombinedAuthContext = { type: 'api_key', userId: null, orgId: 'o1', role: null, permissions: ['zone:read'] };
+    const { context, reflector } = contextWith(auth, 'invalidate');
+    expect(() => new ZoneScopeGuard(reflector).canActivate(context)).toThrow('cache:invalidate');
+  });
+
+  it('allows an API key with the cache:invalidate scope', () => {
+    const auth: CombinedAuthContext = { type: 'api_key', userId: null, orgId: 'o1', role: null, permissions: ['cache:invalidate'] };
+    const { context, reflector } = contextWith(auth, 'invalidate');
+    expect(new ZoneScopeGuard(reflector).canActivate(context)).toBe(true);
+  });
 });
