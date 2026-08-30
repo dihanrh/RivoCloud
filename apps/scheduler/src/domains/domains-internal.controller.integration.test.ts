@@ -6,7 +6,6 @@ import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
 import { APP_ENV } from '../app-env.token.js';
-import { DomainVerificationService } from './domain-verification.service.js';
 
 describe('DomainsInternalController', () => {
   let app: INestApplication;
