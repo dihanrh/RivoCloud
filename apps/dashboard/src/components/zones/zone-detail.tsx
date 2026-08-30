@@ -11,6 +11,7 @@ import { useUpdateZone } from '@/hooks/use-update-zone';
 import { useDeleteZone } from '@/hooks/use-delete-zone';
 import { errorMessage } from '@/lib/http';
 import type { Zone } from '@/lib/types';
+import { ZoneDomains } from './zone-domains';
 
 export function ZoneDetail({ zone }: { zone: Zone }) {
   const router = useRouter();
@@ -44,31 +45,34 @@ export function ZoneDetail({ zone }: { zone: Zone }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{zone.name}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSave} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="zone-name">Name</Label>
-            <Input id="zone-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="zone-origin">Origin URL</Label>
-            <Input id="zone-origin" value={originUrl} onChange={(e) => setOriginUrl(e.target.value)} />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={updateZone.isPending}>
-            {updateZone.isPending ? 'Saving…' : 'Save'}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{zone.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="zone-name">Name</Label>
+              <Input id="zone-name" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="zone-origin">Origin URL</Label>
+              <Input id="zone-origin" value={originUrl} onChange={(e) => setOriginUrl(e.target.value)} />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={updateZone.isPending}>
+              {updateZone.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter>
+          <Button variant="destructive" onClick={handleDelete} disabled={deleteZone.isPending}>
+            Delete zone
           </Button>
-        </form>
-      </CardContent>
-      <CardFooter>
-        <Button variant="destructive" onClick={handleDelete} disabled={deleteZone.isPending}>
-          Delete zone
-        </Button>
-      </CardFooter>
-    </Card>
+        </CardFooter>
+      </Card>
+      <ZoneDomains zoneId={zone.id} />
+    </div>
   );
 }

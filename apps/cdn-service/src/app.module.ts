@@ -7,9 +7,10 @@ import { HealthController } from './health/health.controller.js';
 import { ZonesModule } from './zones/zones.module.js';
 import { RulesModule } from './rules/rules.module.js';
 import { InvalidationsModule } from './invalidations/invalidations.module.js';
+import { DomainsModule } from './domains/domains.module.js';
 
 @Module({
-  imports: [EnvModule, PrismaModule, RedisModule, EventsModule, ZonesModule, RulesModule, InvalidationsModule],
+  imports: [EnvModule, PrismaModule, RedisModule, EventsModule, ZonesModule, RulesModule, InvalidationsModule, DomainsModule],
   controllers: [HealthController],
 })
 export class AppModule {}

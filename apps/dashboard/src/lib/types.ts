@@ -34,6 +34,19 @@ export interface Zone {
   updatedAt: string;
 }
 
+export interface ZoneDomain {
+  id: string;
+  zoneId: string;
+  domain: string;
+  sslStatus: 'pending_dns' | 'pending_ssl' | 'active' | 'error';
+  sslError: string | null;
+  certExpiresAt: string | null;
+  isPrimary: boolean;
+  verifiedAt: string | null;
+  createdAt: string;
+  cnameTarget: string;
+}
+
 export interface Bucket {
   id: string;
   orgId: string;

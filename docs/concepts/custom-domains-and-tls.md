@@ -1,6 +1,6 @@
 # Custom Domains + TLS — Explained for Beginners
 
-This document explains **Stage 8** of RivoCloud's Phase 1 build order: letting a customer use their own domain name (e.g. `cdn.their-company.com`) to reach RivoCloud's CDN, with an HTTPS certificate issued and renewed automatically. **This stage has not been built yet** — everything below describes the design in [`2026-06-29-revocloud-phase1-cdn-edd.md`](../superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md) (Section 5.8, Section 11 block 8) and the [PRD](../superpowers/specs/2026-07-25-revocloud-phase1-prd.md) (Section 5.3), not something you can run today.
+This document explains **Stage 8** of RivoCloud's Phase 1 build order: letting a customer use their own domain name (e.g. `cdn.their-company.com`) to reach RivoCloud's CDN, with an HTTPS certificate issued and renewed automatically. Everything below describes what was built, matching the design in [`2026-06-29-revocloud-phase1-cdn-edd.md`](../superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md) (Section 5.8, Section 11 block 8) and the [PRD](../superpowers/specs/2026-07-25-revocloud-phase1-prd.md) (Section 5.3).
 
 If you haven't read them yet:
 
