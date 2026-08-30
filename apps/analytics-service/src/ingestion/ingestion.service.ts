@@ -35,13 +35,23 @@ export class IngestionService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async consume(subscription: Subscription): Promise<void> {
-    for await (const msg of subscription) {
-      const event = parseEdgeRequestEvent(msg.data);
-      if (!event) {
-        this.logger.warn('dropping malformed edge.request event');
-        continue;
+    // Contain any abrupt failure of the subscription's async iterator (e.g. a
+    // dropped NATS connection rather than a graceful unsubscribe/close) here.
+    // This runs fire-and-forget from onModuleInit (`void this.consume(...)`),
+    // so an unhandled rejection here would otherwise be an unhandled promise
+    // rejection capable of crashing the process — an outage should degrade
+    // ingestion, not the whole service, same principle as flush()'s catch.
+    try {
+      for await (const msg of subscription) {
+        const event = parseEdgeRequestEvent(msg.data);
+        if (!event) {
+          this.logger.warn('dropping malformed edge.request event');
+          continue;
+        }
+        this.enqueue(event);
       }
-      this.enqueue(event);
+    } catch (error) {
+      this.logger.error(`edge.request subscription ended unexpectedly: ${(error as Error).message}`);
     }
   }
 
