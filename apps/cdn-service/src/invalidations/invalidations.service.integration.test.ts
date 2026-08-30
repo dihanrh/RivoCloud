@@ -82,4 +82,24 @@ describe('InvalidationsService', () => {
     const row = await prisma.cacheInvalidation.findUnique({ where: { id: result.invalidationId } });
     expect(row?.patterns).toEqual(['*']);
   });
+
+  it('marks the invalidation failed (not stuck pending) when finalizing throws', async () => {
+    const { org, zone } = await seedZone();
+    const throwingEvents = {
+      requestMany: async () => {
+        throw new Error('simulated NATS failure');
+      },
+    } as unknown as EventsService;
+    const throwingService = new InvalidationsService(prisma, throwingEvents);
+
+    const result = await throwingService.create(org.id, zone.id, null, { patterns: ['/logo.png'] });
+    expect(result.status).toBe('pending');
+
+    let final = await prisma.cacheInvalidation.findUnique({ where: { id: result.invalidationId } });
+    for (let i = 0; i < 50 && final?.status === 'pending'; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      final = await prisma.cacheInvalidation.findUnique({ where: { id: result.invalidationId } });
+    }
+    expect(final?.status).toBe('failed');
+  });
 });

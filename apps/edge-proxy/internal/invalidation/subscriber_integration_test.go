@@ -105,6 +105,43 @@ func TestSubscribe_WildcardSubjectMatchesAnyZone(t *testing.T) {
 // across independent Subscribe calls in one test binary — orthogonal to
 // this test's actual purpose — so the assertion here is on the layer this
 // test controls, not on which of several replies happened to arrive first.
+// TestSubscribe_SubjectZoneIDMismatchIsIgnored verifies the defense-in-depth
+// check added to handle(): a message published on cache.invalidate.zone-a
+// but whose JSON body claims a different zoneId (zone-b) must not purge
+// anything for either zone, and must not reply. This guards a shared NATS
+// bus where any publisher could otherwise purge an arbitrary zone by
+// crafting a mismatched payload.
+func TestSubscribe_SubjectZoneIDMismatchIsIgnored(t *testing.T) {
+	memory, _ := cachestore.NewMemory(10)
+	ctx := context.Background()
+	_ = memory.Set(ctx, "key-a", cachestore.Entry{ZoneID: "zone-a", Path: "/logo.png"})
+	_ = memory.Set(ctx, "key-b", cachestore.Entry{ZoneID: "zone-b", Path: "/logo.png"})
+
+	Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+
+	nc, err := nats.Connect(natsURL())
+	if err != nil {
+		t.Fatalf("failed to connect a requester: %v", err)
+	}
+	defer nc.Close()
+
+	// Published on zone-a's subject, but the payload claims zone-b.
+	payload, _ := json.Marshal(map[string]any{
+		"zoneId":   "zone-b",
+		"patterns": []string{"/logo.png"},
+	})
+	if _, err := nc.Request("cache.invalidate.zone-a", payload, 1*time.Second); err == nil {
+		t.Fatal("expected no reply for a subject/payload zoneId mismatch, but got one")
+	}
+
+	if _, ok, _ := memory.Get(ctx, "key-a"); !ok {
+		t.Fatal("expected key-a (zone-a) to remain, since the payload's own zoneId was zone-b")
+	}
+	if _, ok, _ := memory.Get(ctx, "key-b"); !ok {
+		t.Fatal("expected key-b (zone-b) to remain, since nothing arrived on zone-b's subject")
+	}
+}
+
 func TestSubscribe_MixedCasePatternMatchesLowercaseStoredPath(t *testing.T) {
 	memory, _ := cachestore.NewMemory(10)
 	ctx := context.Background()

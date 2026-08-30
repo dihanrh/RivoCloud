@@ -140,6 +140,7 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 
 	var cfg Config
 	found := false
+	ttl := r.ttl
 	switch {
 	case err == nil:
 		var rc redisConfig
@@ -147,7 +148,16 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 			log.Printf("zone: bad zone_config JSON for %q: %v", zoneID, jsonErr)
 		} else if rc.Enabled {
 			cfg = Config{ID: rc.ID, OriginURL: rc.OriginURL, DefaultTTL: time.Duration(rc.CacheTTL) * time.Second}
-			cfg.Rules = r.resolveRules(ctx, zoneID)
+			rules, rulesOK := r.resolveRules(ctx, zoneID)
+			cfg.Rules = rules
+			if !rulesOK {
+				// The rules read itself failed (as opposed to "genuinely no
+				// rules configured") — memoizing this rule-less config for
+				// the full 60s ttl would silently disable bypass/TTL-override
+				// rules until it expires. Use the short negativeTTL instead
+				// so a transient Redis blip gets retried within ~2s.
+				ttl = r.negativeTTL
+			}
 			found = true
 		}
 	case !errors.Is(err, redis.Nil):
@@ -155,31 +165,36 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 	}
 
 	r.mu.Lock()
-	r.zoneConfig[zoneID] = configEntry{cfg: cfg, found: found, expiresAt: time.Now().Add(r.ttl)}
+	r.zoneConfig[zoneID] = configEntry{cfg: cfg, found: found, expiresAt: time.Now().Add(ttl)}
 	r.mu.Unlock()
 	return cfg, found
 }
 
 // resolveRules reads zone_rules:{zoneID} (written by the CDN Service's
 // RulesConfigPublisher on every rule mutation) and returns them pre-sorted
-// highest-priority-first. A missing key or a JSON error yields no rules —
-// never blocking config resolution on the rules read.
-func (r *RedisRegistry) resolveRules(ctx context.Context, zoneID string) []cacherules.Rule {
+// highest-priority-first. The second return value distinguishes "genuinely
+// no rules configured" (redis.Nil, ok=true — safe to cache for the full
+// registry TTL) from "the read itself failed" (ok=false) — resolveConfig
+// uses this to avoid memoizing a rule-less config for the full TTL when a
+// transient Redis error is the actual cause, which would otherwise silently
+// disable bypass/TTL-override rules until the cache entry expires.
+func (r *RedisRegistry) resolveRules(ctx context.Context, zoneID string) (rules []cacherules.Rule, ok bool) {
 	raw, err := r.client.Get(ctx, "zone_rules:"+zoneID).Result()
 	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			log.Printf("zone: zone_rules lookup error for %q: %v", zoneID, err)
+		if errors.Is(err, redis.Nil) {
+			return nil, true
 		}
-		return nil
+		log.Printf("zone: zone_rules lookup error for %q: %v", zoneID, err)
+		return nil, false
 	}
 	var parsed []redisRule
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		log.Printf("zone: bad zone_rules JSON for %q: %v", zoneID, err)
-		return nil
+		return nil, false
 	}
-	rules := make([]cacherules.Rule, len(parsed))
+	parsedRules := make([]cacherules.Rule, len(parsed))
 	for i, p := range parsed {
-		rules[i] = cacherules.Rule{
+		parsedRules[i] = cacherules.Rule{
 			Pattern:        p.Pattern,
 			PatternType:    p.PatternType,
 			Action:         p.Action,
@@ -190,5 +205,5 @@ func (r *RedisRegistry) resolveRules(ctx context.Context, zoneID string) []cache
 			Priority:       p.Priority,
 		}
 	}
-	return cacherules.SortByPriorityDesc(rules)
+	return cacherules.SortByPriorityDesc(parsedRules), true
 }

@@ -62,7 +62,7 @@ describe('InvalidationsController', () => {
       .post(`/api/v1/zones/${zone.id}/cache/invalidate`)
       .set('Authorization', 'Bearer whatever')
       .send({ patterns: ['/logo.png'] });
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
     expect(response.body.status).toBe('pending');
   });
 
@@ -89,7 +89,16 @@ describe('InvalidationsController', () => {
     const response = await request(app.getHttpServer())
       .post(`/api/v1/zones/${zone.id}/cache/purge`)
       .set('Authorization', 'Bearer whatever');
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
+  });
+
+  it('rejects an invalidation with more than 100 patterns', async () => {
+    const zone = await seedZoneAndAuth('owner');
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/zones/${zone.id}/cache/invalidate`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ patterns: Array.from({ length: 101 }, (_, i) => `/p${i}`) });
+    expect(response.status).toBe(400);
   });
 
   it('lists and fetches invalidation history', async () => {

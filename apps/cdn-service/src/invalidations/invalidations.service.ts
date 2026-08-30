@@ -40,8 +40,13 @@ export class InvalidationsService {
 
     // EDD Section 4.4: the API returns 202/pending immediately; aggregation
     // of edge replies happens afterward, in the background.
-    void this.collectAndFinalize(zoneId, invalidation.id, patterns, tags).catch((error: Error) => {
+    void this.collectAndFinalize(zoneId, invalidation.id, patterns, tags).catch(async (error: Error) => {
       this.logger.error(`invalidation ${invalidation.id} failed to finalize: ${error.message}`);
+      await this.db.cacheInvalidation
+        .update({ where: { id: invalidation.id }, data: { status: 'failed' } })
+        .catch((updateError: Error) => {
+          this.logger.error(`invalidation ${invalidation.id} could not even be marked failed: ${updateError.message}`);
+        });
     });
 
     return { invalidationId: invalidation.id, status: invalidation.status };
@@ -75,6 +80,16 @@ export class InvalidationsService {
       { zoneId, patterns, tags, invalidationId },
       REPLY_WINDOW_MS,
     );
+    // At Phase 1's single-Edge-Proxy-replica scale, summing keysPurged
+    // across replies is exact. Once multiple replicas of the same Edge
+    // Proxy exist, every replica purges the SAME shared L2 (Redis) cache
+    // independently and each reports its own L2 count in keysPurged, so
+    // this sum double- (triple-, etc.) counts the shared L2 layer once per
+    // replica. The result becomes an overcount of unique keys purged, not
+    // incorrect purging — every replica's purge still succeeds. This is a
+    // known, accepted limitation for now; a proper fix would need each Edge
+    // Proxy to report per-layer counts so the CDN Service can count the
+    // shared L2 layer only once across all replies.
     const keysPurged = replies.reduce((sum, reply) => sum + reply.keysPurged, 0);
     await this.db.cacheInvalidation.update({
       where: { id: invalidationId },

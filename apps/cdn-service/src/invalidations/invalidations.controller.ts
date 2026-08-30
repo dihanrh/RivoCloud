@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth-guard.js';
 import { RequireZoneScope, ZoneScopeGuard } from '../auth/zone-scope.guard.js';
 import { AuthCtx, type CombinedAuthContext } from '../auth/auth-context.decorator.js';
@@ -19,12 +19,14 @@ export class InvalidationsController {
   constructor(private readonly invalidations: InvalidationsService) {}
 
   @Post('invalidate')
+  @HttpCode(202)
   @RequireZoneScope('invalidate')
   invalidate(@AuthCtx() auth: CombinedAuthContext, @Param('zoneId') zoneId: string, @Body() dto: CreateInvalidationDto) {
     return this.invalidations.create(requireOrgId(auth), zoneId, auth.userId, dto);
   }
 
   @Post('purge')
+  @HttpCode(202)
   @RequireZoneScope('invalidate')
   purge(@AuthCtx() auth: CombinedAuthContext, @Param('zoneId') zoneId: string) {
     return this.invalidations.purgeAll(requireOrgId(auth), zoneId, auth.userId);

@@ -57,6 +57,11 @@ func handle(msg *nats.Msg, datacenter string, layers []cachestore.Layer) {
 		return
 	}
 
+	if expectedSubject := "cache.invalidate." + event.ZoneID; msg.Subject != expectedSubject {
+		log.Printf("invalidation: payload zoneId %q does not match subject %q, ignoring", event.ZoneID, msg.Subject)
+		return
+	}
+
 	// Entry.Path is always stored lowercase (cachestore normalizes it at
 	// write time — see Task 10), but a pattern arrives here exactly as a
 	// customer typed it via the CDN Service's public API and may be mixed
@@ -78,11 +83,10 @@ func handle(msg *nats.Msg, datacenter string, layers []cachestore.Layer) {
 			continue
 		}
 		count, err := layer.Purge(ctx, event.ZoneID, event.Patterns, event.Tags)
+		total += count
 		if err != nil {
 			log.Printf("invalidation: layer %d purge error for zone %s: %v", i, event.ZoneID, err)
-			continue
 		}
-		total += count
 	}
 
 	if msg.Reply == "" {
