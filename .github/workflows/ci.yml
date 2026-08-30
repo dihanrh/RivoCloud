@@ -68,10 +68,20 @@ jobs:
         image: nats:2-alpine
         ports:
           - 4222:4222
+      clickhouse:
+        image: clickhouse/clickhouse-server:23
+        ports:
+          - 8123:8123
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://rivocloud:rivocloud_dev_password@localhost:5432/rivocloud
       REDIS_URL: redis://localhost:6379
       NATS_URL: nats://localhost:4222
+      CLICKHOUSE_URL: http://localhost:8123
       INTERNAL_API_SECRET: ci_internal_secret_placeholder_value
       MINIO_URL: http://localhost:9000
       MINIO_ROOT_USER: rivocloud
