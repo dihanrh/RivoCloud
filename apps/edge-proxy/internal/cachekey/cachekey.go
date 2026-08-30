@@ -10,8 +10,12 @@ import (
 
 // Build constructs the canonical cache key for a request, per the EDD's
 // cache-key design (Section 5.2): zone + method + normalized host/path/query,
-// hashed with SHA-256.
-func Build(zoneID, method, host, path, rawQuery string) string {
+// hashed with SHA-256. queryMode/queryWhitelist implement the per-rule
+// query-string normalization from cache_rules (EDD Section 6.2): "strip_all"
+// drops every query param, "whitelist" keeps only queryWhitelist's keys,
+// "include_all" (also the fallback for "" or an unrecognized mode, matching
+// pre-Stage-7 behavior) sorts and keeps every param.
+func Build(zoneID, method, host, path, rawQuery, queryMode string, queryWhitelist []string) string {
 	h := sha256.New()
 	h.Write([]byte(zoneID))
 	h.Write([]byte{'|'})
@@ -21,7 +25,7 @@ func Build(zoneID, method, host, path, rawQuery string) string {
 	h.Write([]byte{'|'})
 	h.Write([]byte(normalizePath(path)))
 	h.Write([]byte{'|'})
-	h.Write([]byte(normalizeQuery(rawQuery)))
+	h.Write([]byte(normalizeQuery(rawQuery, queryMode, queryWhitelist)))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -50,13 +54,27 @@ func normalizePath(path string) string {
 	return path
 }
 
-func normalizeQuery(rawQuery string) string {
+func normalizeQuery(rawQuery, queryMode string, whitelist []string) string {
+	if queryMode == "strip_all" {
+		return ""
+	}
 	if rawQuery == "" {
 		return ""
 	}
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return rawQuery
+	}
+	if queryMode == "whitelist" {
+		allowed := make(map[string]bool, len(whitelist))
+		for _, k := range whitelist {
+			allowed[k] = true
+		}
+		for k := range values {
+			if !allowed[k] {
+				delete(values, k)
+			}
+		}
 	}
 	if len(values) == 0 {
 		return ""

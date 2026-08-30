@@ -57,7 +57,7 @@ func TestCachingHandler_FreshL2IsPreferredOverStaleL1(t *testing.T) {
 		Now:    func() time.Time { return now },
 	}
 
-	key := cachekey.Build("z1", "GET", "demo.test", "/shared", "")
+	key := cachekey.Build("z1", "GET", "demo.test", "/shared", "", "include_all", nil)
 	ctx := context.Background()
 	// L1 holds an expired copy; the shared L2 holds a fresh one.
 	if err := l1.Set(ctx, key, entryWith("stale from L1", now.Add(-2*time.Hour), now.Add(-time.Minute), now.Add(time.Hour))); err != nil {
@@ -110,7 +110,7 @@ func TestCachingHandler_AllLayersStaleStillServesStaleOnOriginFailure(t *testing
 		Now:    func() time.Time { return now },
 	}
 
-	key := cachekey.Build("z1", "GET", "demo.test", "/all-stale", "")
+	key := cachekey.Build("z1", "GET", "demo.test", "/all-stale", "", "include_all", nil)
 	ctx := context.Background()
 	// L1's copy expired an hour ago, L2's only a minute ago: the fresher of
 	// the two stale candidates should win.

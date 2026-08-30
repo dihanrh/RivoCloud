@@ -11,6 +11,7 @@ import (
 	"rivocloud/edge-proxy/internal/cachestore"
 	"rivocloud/edge-proxy/internal/configsync"
 	"rivocloud/edge-proxy/internal/health"
+	"rivocloud/edge-proxy/internal/invalidation"
 	"rivocloud/edge-proxy/internal/proxy"
 	"rivocloud/edge-proxy/internal/zone"
 )
@@ -30,12 +31,15 @@ func main() {
 	zones := zone.NewRedisRegistry(redisClient)
 	configsync.Subscribe(natsURL(), zones)
 
+	layers := []cachestore.Layer{
+		memory,
+		cachestore.NewRedis(redisClient, "edge-proxy:"),
+	}
+	invalidation.Subscribe(natsURL(), datacenter(), layers)
+
 	handler := &proxy.CachingHandler{
-		Zones: zones,
-		Layers: []cachestore.Layer{
-			memory,
-			cachestore.NewRedis(redisClient, "edge-proxy:"),
-		},
+		Zones:  zones,
+		Layers: layers,
 		Origin: newOriginClient(),
 	}
 
@@ -84,6 +88,13 @@ func l1MaxEntries() int {
 		}
 	}
 	return 10_000
+}
+
+func datacenter() string {
+	if dc := os.Getenv("EDGE_DATACENTER"); dc != "" {
+		return dc
+	}
+	return "local"
 }
 
 func mustConnectRedis() *redis.Client {

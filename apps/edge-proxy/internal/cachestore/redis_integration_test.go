@@ -73,3 +73,48 @@ func TestRedis_EntryPastStaleUntilIsNotStored(t *testing.T) {
 		t.Fatalf("expected an already-stale entry to not be stored, got ok=%v err=%v", ok, err)
 	}
 }
+
+func TestRedis_PurgeByPathPattern(t *testing.T) {
+	r := newTestRedisLayer(t)
+	ctx := context.Background()
+	future := time.Now().Add(time.Hour)
+	_ = r.Set(ctx, "key-a", Entry{ZoneID: "z1", Path: "/assets/app.js", StaleUntil: future})
+	_ = r.Set(ctx, "key-b", Entry{ZoneID: "z1", Path: "/index.html", StaleUntil: future})
+	_ = r.Set(ctx, "key-c", Entry{ZoneID: "z2", Path: "/assets/app.js", StaleUntil: future})
+
+	count, err := r.Purge(ctx, "z1", []string{"/assets/*"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 key purged, got %d", count)
+	}
+	if _, ok, _ := r.Get(ctx, "key-a"); ok {
+		t.Fatal("expected key-a to have been purged")
+	}
+	if _, ok, _ := r.Get(ctx, "key-b"); !ok {
+		t.Fatal("expected key-b (different path) to remain")
+	}
+	if _, ok, _ := r.Get(ctx, "key-c"); !ok {
+		t.Fatal("expected key-c (different zone) to remain")
+	}
+}
+
+func TestRedis_PurgeByTag(t *testing.T) {
+	r := newTestRedisLayer(t)
+	ctx := context.Background()
+	future := time.Now().Add(time.Hour)
+	_ = r.Set(ctx, "tag-key-a", Entry{ZoneID: "z1", Path: "/posts/1", Tags: []string{"blog-post-123"}, StaleUntil: future})
+	_ = r.Set(ctx, "tag-key-b", Entry{ZoneID: "z1", Path: "/other", Tags: []string{"unrelated"}, StaleUntil: future})
+
+	count, err := r.Purge(ctx, "z1", nil, []string{"blog-post-123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 key purged, got %d", count)
+	}
+	if _, ok, _ := r.Get(ctx, "tag-key-b"); !ok {
+		t.Fatal("expected tag-key-b (no matching tag) to remain")
+	}
+}

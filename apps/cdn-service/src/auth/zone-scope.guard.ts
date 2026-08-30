@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetad
 import { Reflector } from '@nestjs/core';
 import type { CombinedAuthContext } from './auth-context.decorator.js';
 
-export type ZoneAction = 'read' | 'write' | 'delete';
+export type ZoneAction = 'read' | 'write' | 'delete' | 'invalidate';
 export const ZONE_SCOPE_KEY = 'zoneScope';
 export const RequireZoneScope = (action: ZoneAction) => SetMetadata(ZONE_SCOPE_KEY, action);
 
@@ -14,6 +14,18 @@ const ROLES_BY_ACTION: Record<ZoneAction, string[]> = {
   read: ['owner', 'admin', 'developer', 'viewer'],
   write: ['owner', 'admin', 'developer'],
   delete: ['owner', 'admin', 'developer'],
+  invalidate: ['owner', 'admin', 'developer'],
+};
+
+// zone:read/write/delete share their action name as the scope suffix, but
+// cache invalidation uses the identity-service's own cache:invalidate scope
+// (not zone:invalidate, which doesn't exist in API_KEY_SCOPES) — this map
+// lets each action name diverge from its scope string independently.
+const SCOPE_BY_ACTION: Record<ZoneAction, string> = {
+  read: 'zone:read',
+  write: 'zone:write',
+  delete: 'zone:delete',
+  invalidate: 'cache:invalidate',
 };
 
 @Injectable()
@@ -29,7 +41,7 @@ export class ZoneScopeGuard implements CanActivate {
     const auth: CombinedAuthContext = request.auth;
 
     if (auth.type === 'api_key') {
-      const required = `zone:${action}`;
+      const required = SCOPE_BY_ACTION[action];
       if (!auth.permissions?.includes(required)) {
         throw new ForbiddenException(`API key is missing the "${required}" scope`);
       }

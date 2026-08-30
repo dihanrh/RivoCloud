@@ -46,13 +46,15 @@ describe('ZoneConfigPublisher', () => {
     expect(events.getLastPublished('config.zones.updated')).toEqual({ zoneId: zone.id });
   });
 
-  it('deletes both Redis keys on unpublish', async () => {
+  it('deletes zone_config, zone_host, and zone_rules keys on unpublish', async () => {
     const zone = await seedZone();
     await publisher.publish(zone);
+    await redis.set(`zone_rules:${zone.id}`, '[]');
     await publisher.unpublish(zone);
 
     expect(await redis.get(`zone_config:${zone.id}`)).toBeNull();
     const expectedHost = `my-blog-${zone.id.slice(0, 8)}.cdn.rivocloud.dev`;
     expect(await redis.get(`zone_host:${expectedHost}`)).toBeNull();
+    expect(await redis.get(`zone_rules:${zone.id}`)).toBeNull();
   });
 });

@@ -3,6 +3,8 @@ package zone
 import (
 	"strings"
 	"time"
+
+	"rivocloud/edge-proxy/internal/cacherules"
 )
 
 // Config describes one CDN zone: which inbound Host header it matches and
@@ -16,6 +18,10 @@ type Config struct {
 	Host       string
 	OriginURL  string
 	DefaultTTL time.Duration
+	// Rules is this zone's cache rules, pre-sorted highest-priority-first
+	// (Stage 7), read from zone_rules:{ID} in Redis. Empty for a zone with
+	// no rules configured, or for a Config built by StaticRegistry.
+	Rules []cacherules.Rule
 }
 
 // Registry resolves an inbound request's Host header to a zone Config.

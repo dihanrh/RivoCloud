@@ -134,7 +134,7 @@ func TestCachingHandler_NotModifiedWithNoStoreIsNotStored(t *testing.T) {
 	clock = clock.Add(time.Hour)
 	h.ServeHTTP(httptest.NewRecorder(), req()) // revalidates; the 304 says no-store
 
-	key := cachekey.Build("z1", "GET", "demo.test", "/revalidate-nostore", "")
+	key := cachekey.Build("z1", "GET", "demo.test", "/revalidate-nostore", "", "include_all", nil)
 	entry, ok, err := memory.Get(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)

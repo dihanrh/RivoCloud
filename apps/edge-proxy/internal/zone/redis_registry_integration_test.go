@@ -140,3 +140,84 @@ func TestRedisRegistry_NegativeLookupExpiresQuicklyThenFindsANewlyPublishedZone(
 		t.Fatalf("unexpected config after negative cache expiry: %+v", cfg)
 	}
 }
+
+func TestRedisRegistry_ResolvesRulesSortedByPriorityDescending(t *testing.T) {
+	client := newTestRedisClient(t)
+	seedZoneConfig(t, client, "rules.cdn.rivocloud.dev", "zone-rules-1", redisConfig{
+		ID: "zone-rules-1", Slug: "rules", OriginURL: "https://api.example.com", CacheTTL: 3600, Enabled: true,
+	})
+	rulesJSON := `[
+		{"pattern":"/assets/*","patternType":"glob","action":"cache","edgeTtl":604800,"priority":1},
+		{"pattern":"/api/*","patternType":"glob","action":"bypass","edgeTtl":0,"priority":10}
+	]`
+	if err := client.Set(context.Background(), "zone_rules:zone-rules-1", rulesJSON, 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := NewRedisRegistry(client)
+	cfg, ok := registry.Resolve("rules.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to resolve")
+	}
+	if len(cfg.Rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(cfg.Rules))
+	}
+	if cfg.Rules[0].Pattern != "/api/*" || cfg.Rules[0].Priority != 10 {
+		t.Fatalf("expected the priority-10 rule first, got %+v", cfg.Rules[0])
+	}
+}
+
+func TestRedisRegistry_RulesReadErrorUsesShortTTLAndRetriesQuickly(t *testing.T) {
+	client := newTestRedisClient(t)
+	seedZoneConfig(t, client, "rules-retry.cdn.rivocloud.dev", "zone-rules-retry", redisConfig{
+		ID: "zone-rules-retry", Slug: "rules-retry", OriginURL: "https://api.example.com", CacheTTL: 3600, Enabled: true,
+	})
+	// Malformed JSON triggers the unmarshal-error (ok=false) path in
+	// resolveRules, not the redis.Nil (ok=true, "genuinely no rules") path.
+	if err := client.Set(context.Background(), "zone_rules:zone-rules-retry", "not-valid-json", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := NewRedisRegistry(client)
+	first, ok := registry.Resolve("rules-retry.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to resolve even though the rules read failed")
+	}
+	if len(first.Rules) != 0 {
+		t.Fatalf("expected no rules on a failed rules read, got %+v", first.Rules)
+	}
+
+	// Fix the rules key. If the failed rules read had been cached for the
+	// full 60s ttl, this would still see no rules. It should instead have
+	// been cached for the much shorter negativeTTL (2s).
+	rulesJSON := `[{"pattern":"/api/*","patternType":"glob","action":"bypass","edgeTtl":0,"priority":10}]`
+	if err := client.Set(context.Background(), "zone_rules:zone-rules-retry", rulesJSON, 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(2100 * time.Millisecond)
+
+	second, ok := registry.Resolve("rules-retry.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to still resolve")
+	}
+	if len(second.Rules) != 1 || second.Rules[0].Pattern != "/api/*" {
+		t.Fatalf("expected the short retry TTL to pick up the now-valid rules, got %+v", second.Rules)
+	}
+}
+
+func TestRedisRegistry_MissingRulesKeyResolvesWithNoRules(t *testing.T) {
+	client := newTestRedisClient(t)
+	seedZoneConfig(t, client, "norules.cdn.rivocloud.dev", "zone-no-rules", redisConfig{
+		ID: "zone-no-rules", Slug: "norules", OriginURL: "https://api.example.com", CacheTTL: 3600, Enabled: true,
+	})
+
+	registry := NewRedisRegistry(client)
+	cfg, ok := registry.Resolve("norules.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to resolve")
+	}
+	if len(cfg.Rules) != 0 {
+		t.Fatalf("expected no rules, got %+v", cfg.Rules)
+	}
+}

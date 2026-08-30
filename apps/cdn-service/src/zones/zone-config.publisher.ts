@@ -31,7 +31,7 @@ export class ZoneConfigPublisher {
   }
 
   async unpublish(zone: PullZone): Promise<void> {
-    await this.redis.del(`zone_config:${zone.id}`, `zone_host:${this.hostFor(zone)}`);
+    await this.redis.del(`zone_config:${zone.id}`, `zone_host:${this.hostFor(zone)}`, `zone_rules:${zone.id}`);
     await this.events.publish('config.zones.updated', { zoneId: zone.id });
   }
 
