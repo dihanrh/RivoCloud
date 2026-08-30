@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"rivocloud/edge-proxy/internal/analytics"
 	"rivocloud/edge-proxy/internal/cachestore"
 	"rivocloud/edge-proxy/internal/configsync"
 	"rivocloud/edge-proxy/internal/health"
@@ -37,10 +38,15 @@ func main() {
 	}
 	invalidation.Subscribe(natsURL(), datacenter(), layers)
 
+	analyticsPublisher, _ := analytics.Connect(natsURL())
+
 	handler := &proxy.CachingHandler{
-		Zones:  zones,
-		Layers: layers,
-		Origin: newOriginClient(),
+		Zones:          zones,
+		Layers:         layers,
+		Origin:         newOriginClient(),
+		Analytics:      analyticsPublisher,
+		Datacenter:     datacenter(),
+		DefaultCountry: defaultCountry(),
 	}
 
 	mux := http.NewServeMux()
@@ -95,6 +101,13 @@ func datacenter() string {
 		return dc
 	}
 	return "local"
+}
+
+func defaultCountry() string {
+	if c := os.Getenv("EDGE_DEFAULT_COUNTRY"); c != "" {
+		return c
+	}
+	return "ZZ"
 }
 
 func mustConnectRedis() *redis.Client {

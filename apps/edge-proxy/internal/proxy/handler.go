@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"log"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"rivocloud/edge-proxy/internal/analytics"
 	"rivocloud/edge-proxy/internal/cachekey"
 	"rivocloud/edge-proxy/internal/cacherules"
 	"rivocloud/edge-proxy/internal/cachestore"
@@ -36,17 +39,36 @@ type CachingHandler struct {
 	Layers []cachestore.Layer // checked in order; index 0 is fastest
 	Origin OriginFetcher
 	Now    func() time.Time
+
+	// Analytics publishes one edge.request event per handled request (EDD
+	// Section 2.5). Nil in tests that don't care about analytics.
+	Analytics      analytics.EventPublisher
+	Datacenter     string
+	DefaultCountry string
 }
 
 func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := h.now()
+	rec := newStatusRecorder(w)
+	cacheStatus := "BYPASS"
+	var resolvedZone zone.Config
+	zoneResolved := false
+	defer func() {
+		if zoneResolved {
+			h.recordEvent(r, resolvedZone, rec, cacheStatus, start)
+		}
+	}()
+
 	z, ok := h.Zones.Resolve(r.Host)
 	if !ok {
-		http.Error(w, "unknown zone", http.StatusNotFound)
+		http.Error(rec, "unknown zone", http.StatusNotFound)
 		return
 	}
+	resolvedZone = z
+	zoneResolved = true
 
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		h.proxyUncached(w, r, z)
+		h.proxyUncached(rec, r, z)
 		return
 	}
 
@@ -54,7 +76,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// carries no range, so serving a stored full body would answer the wrong
 	// bytes and storing a 206 would poison the full-body entry.
 	if r.Header.Get("Range") != "" {
-		h.proxyUncached(w, r, z)
+		h.proxyUncached(rec, r, z)
 		return
 	}
 
@@ -72,7 +94,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// cache this," which is exactly what the uncached passthrough path
 	// already does — no separate non-caching branch needed.
 	if ruleMatched && (rule.Action == "bypass" || rule.Action == "no-store") {
-		h.proxyUncached(w, r, z)
+		h.proxyUncached(rec, r, z)
 		return
 	}
 
@@ -86,9 +108,11 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	entry, hitLayerIdx, found := h.lookup(r.Context(), key, now)
 	if found && entry.Fresh(now) {
 		h.populateFasterLayers(r.Context(), key, entry, hitLayerIdx)
-		writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "HIT")
+		cacheStatus = "HIT"
+		writeEntry(rec, r, h.negotiateEncoding(r, key, entry), now, "HIT")
 		return
 	}
+	cacheStatus = "MISS"
 
 	etag := ""
 	if found {
@@ -112,10 +136,11 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if found && entry.UsableAsStale(now) {
-			writeEntry(w, r, h.negotiateEncoding(r, key, entry), now, "STALE")
+			cacheStatus = "STALE"
+			writeEntry(rec, r, h.negotiateEncoding(r, key, entry), now, "STALE")
 			return
 		}
-		http.Error(w, "origin unreachable", http.StatusBadGateway)
+		http.Error(rec, "origin unreachable", http.StatusBadGateway)
 		return
 	}
 
@@ -127,7 +152,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// entry here would emit WriteHeader(0) and panic, so fail loudly
 			// instead.
 			log.Printf("origin returned 304 with nothing cached for key %s", key)
-			http.Error(w, "unexpected origin 304", http.StatusBadGateway)
+			http.Error(rec, "unexpected origin 304", http.StatusBadGateway)
 			return
 		}
 		refreshed := refreshExpiry(entry, result.decision, now)
@@ -135,14 +160,15 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if result.decision.Cacheable {
 			h.store(r.Context(), key, refreshed)
 		}
-		writeEntry(w, r, h.negotiateEncoding(r, key, refreshed), now, "HIT")
+		cacheStatus = "HIT"
+		writeEntry(rec, r, h.negotiateEncoding(r, key, refreshed), now, "HIT")
 		return
 	}
 
 	defer result.response.Body.Close()
 	body, err := io.ReadAll(result.response.Body)
 	if err != nil {
-		http.Error(w, "error reading origin response", http.StatusBadGateway)
+		http.Error(rec, "error reading origin response", http.StatusBadGateway)
 		return
 	}
 	newEntry := buildEntry(result.response, body, result.decision, now, z.ID, normalizedPath)
@@ -150,7 +176,7 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if result.decision.Cacheable {
 		h.store(r.Context(), key, newEntry)
 	}
-	writeEntry(w, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")
+	writeEntry(rec, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")
 }
 
 func (h *CachingHandler) proxyUncached(w http.ResponseWriter, r *http.Request, z zone.Config) {
@@ -489,6 +515,80 @@ func writeEntry(w http.ResponseWriter, r *http.Request, entry cachestore.Entry, 
 		return
 	}
 	w.Write(entry.Body)
+}
+
+// statusRecorder wraps http.ResponseWriter to capture the status code and
+// byte count actually sent to the client — neither is otherwise recorded
+// anywhere on the hot path, and both are needed for analytics events.
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode   int
+	bytesWritten int64
+}
+
+func newStatusRecorder(w http.ResponseWriter) *statusRecorder {
+	return &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (rec *statusRecorder) WriteHeader(code int) {
+	rec.statusCode = code
+	rec.ResponseWriter.WriteHeader(code)
+}
+
+func (rec *statusRecorder) Write(b []byte) (int, error) {
+	n, err := rec.ResponseWriter.Write(b)
+	rec.bytesWritten += int64(n)
+	return n, err
+}
+
+// recordEvent publishes one edge.request analytics event (EDD Section 2.5).
+// h.Analytics is nil in every test that doesn't care about analytics, and
+// Publisher.Publish itself degrades to a no-op whenever NATS is unavailable.
+func (h *CachingHandler) recordEvent(r *http.Request, z zone.Config, rec *statusRecorder, cacheStatus string, start time.Time) {
+	if h.Analytics == nil {
+		return
+	}
+	h.Analytics.Publish(analytics.Event{
+		Timestamp:    start,
+		ZoneID:       z.ID,
+		OrgID:        z.OrgID,
+		Datacenter:   h.Datacenter,
+		Method:       r.Method,
+		Path:         r.URL.Path,
+		StatusCode:   rec.statusCode,
+		CacheStatus:  cacheStatus,
+		BytesSent:    rec.bytesWritten,
+		DurationMs:   time.Since(start).Milliseconds(),
+		Country:      requestCountry(r, h.DefaultCountry),
+		ClientIPHash: hashClientIP(r.RemoteAddr),
+	})
+}
+
+// requestCountry reads an optional X-RivoCloud-Country header — the seam a
+// future GeoDNS/load-balancer layer (or a test) sets — falling back to the
+// proxy's configured default. Phase 1 has no GeoIP database wired up
+// anywhere in this codebase (no distributed edge yet — PRD Stage 12), so
+// this header is the accepted placeholder source of truth for the "country"
+// analytics dimension until a real GeoDNS layer sets it instead.
+func requestCountry(r *http.Request, fallback string) string {
+	if c := r.Header.Get("X-RivoCloud-Country"); c != "" {
+		return strings.ToUpper(c)
+	}
+	if fallback != "" {
+		return fallback
+	}
+	return "ZZ"
+}
+
+// hashClientIP SHA-256 hashes the client's IP so analytics never stores a
+// real visitor's address (EDD Section 2.5's client_ip_hash field).
+func hashClientIP(remoteAddr string) string {
+	ip, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		ip = remoteAddr
+	}
+	sum := sha256.Sum256([]byte(ip))
+	return hex.EncodeToString(sum[:])
 }
 
 func (h *CachingHandler) negotiateEncoding(r *http.Request, baseKey string, identity cachestore.Entry) cachestore.Entry {
