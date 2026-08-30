@@ -6,9 +6,10 @@ import { HealthController } from './health/health.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { IngestionModule } from './ingestion/ingestion.module.js';
 import { IngestionInternalModule } from './ingestion/ingestion-internal.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 
 @Module({
-  imports: [EnvModule, PrismaModule, ClickhouseModule, AuthModule, IngestionModule, IngestionInternalModule],
+  imports: [EnvModule, PrismaModule, ClickhouseModule, AuthModule, IngestionModule, IngestionInternalModule, AnalyticsModule],
   controllers: [HealthController],
 })
 export class AppModule {}
