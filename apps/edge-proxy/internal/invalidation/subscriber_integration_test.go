@@ -27,7 +27,11 @@ func TestSubscribe_PurgesLayersAndReplies(t *testing.T) {
 	_ = memory.Set(ctx, "key-a", cachestore.Entry{ZoneID: "zone-inv-1", Path: "/assets/app.js"})
 	_ = memory.Set(ctx, "key-b", cachestore.Entry{ZoneID: "zone-inv-1", Path: "/index.html"})
 
-	Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	sub, err := Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	nc, err := nats.Connect(natsURL())
 	if err != nil {
@@ -71,7 +75,11 @@ func TestSubscribe_WildcardSubjectMatchesAnyZone(t *testing.T) {
 	ctx := context.Background()
 	_ = memory.Set(ctx, "key-a", cachestore.Entry{ZoneID: "zone-inv-2", Path: "/logo.png"})
 
-	Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	sub, err := Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	nc, err := nats.Connect(natsURL())
 	if err != nil {
@@ -88,23 +96,6 @@ func TestSubscribe_WildcardSubjectMatchesAnyZone(t *testing.T) {
 	}
 }
 
-// TestSubscribe_MixedCasePatternMatchesLowercaseStoredPath verifies the
-// case-folding addition made after Task 10: Entry.Path is always stored
-// lowercase, but an invalidation pattern arrives over NATS exactly as a
-// customer typed it (possibly mixed case). Without lowercasing the pattern
-// before Purge, a mixed-case pattern would silently fail to match anything.
-//
-// Like TestSubscribe_WildcardSubjectMatchesAnyZone, this checks the actual
-// purge side effect on this test's own layer rather than the reply body's
-// keysPurged count: every earlier test in this file also leaves its own
-// wildcard subscription (cache.invalidate.*) running for the rest of the
-// process, so a later request can legitimately race against a still-live
-// subscription with a different zoneID/layer and have that stale, unrelated
-// reply (correctly reporting 0 for its own layer) win the request. That
-// race is a property of Subscribe() never closing its NATS connection
-// across independent Subscribe calls in one test binary — orthogonal to
-// this test's actual purpose — so the assertion here is on the layer this
-// test controls, not on which of several replies happened to arrive first.
 // TestSubscribe_SubjectZoneIDMismatchIsIgnored verifies the defense-in-depth
 // check added to handle(): a message published on cache.invalidate.zone-a
 // but whose JSON body claims a different zoneId (zone-b) must not purge
@@ -117,7 +108,11 @@ func TestSubscribe_SubjectZoneIDMismatchIsIgnored(t *testing.T) {
 	_ = memory.Set(ctx, "key-a", cachestore.Entry{ZoneID: "zone-a", Path: "/logo.png"})
 	_ = memory.Set(ctx, "key-b", cachestore.Entry{ZoneID: "zone-b", Path: "/logo.png"})
 
-	Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	sub, err := Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	nc, err := nats.Connect(natsURL())
 	if err != nil {
@@ -142,12 +137,21 @@ func TestSubscribe_SubjectZoneIDMismatchIsIgnored(t *testing.T) {
 	}
 }
 
+// TestSubscribe_MixedCasePatternMatchesLowercaseStoredPath verifies the
+// case-folding addition made after Task 10: Entry.Path is always stored
+// lowercase, but an invalidation pattern arrives over NATS exactly as a
+// customer typed it (possibly mixed case). Without lowercasing the pattern
+// before Purge, a mixed-case pattern would silently fail to match anything.
 func TestSubscribe_MixedCasePatternMatchesLowercaseStoredPath(t *testing.T) {
 	memory, _ := cachestore.NewMemory(10)
 	ctx := context.Background()
 	_ = memory.Set(ctx, "key-a", cachestore.Entry{ZoneID: "zone-inv-3", Path: "/assets/app.js"})
 
-	Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	sub, err := Subscribe(natsURL(), "test-dc", []cachestore.Layer{memory})
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
 	nc, err := nats.Connect(natsURL())
 	if err != nil {

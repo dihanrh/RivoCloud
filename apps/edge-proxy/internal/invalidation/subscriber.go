@@ -36,17 +36,26 @@ type invalidateReply struct {
 // for all zones it might be caching content for"). Best-effort: if NATS is
 // unavailable at startup, this only logs — invalidation degrades to "wait
 // for the TTL to expire," never a hard failure of the proxy itself.
-func Subscribe(natsURL, datacenter string, layers []cachestore.Layer) {
+//
+// The returned *nats.Subscription is nil on any error; production callers
+// (main.go) can discard it. Integration tests that call Subscribe more than
+// once in the same process MUST call sub.Unsubscribe() in cleanup — a
+// leaked subscription keeps matching cache.invalidate.* for the rest of the
+// process and will race a later test's own request for the reply.
+func Subscribe(natsURL, datacenter string, layers []cachestore.Layer) (*nats.Subscription, error) {
 	nc, err := nats.Connect(natsURL)
 	if err != nil {
 		log.Printf("invalidation: NATS unavailable, invalidation will not be delivered: %v", err)
-		return
+		return nil, err
 	}
-	if _, err := nc.Subscribe("cache.invalidate.*", func(msg *nats.Msg) {
+	sub, err := nc.Subscribe("cache.invalidate.*", func(msg *nats.Msg) {
 		handle(msg, datacenter, layers)
-	}); err != nil {
+	})
+	if err != nil {
 		log.Printf("invalidation: subscribe failed: %v", err)
+		return nil, err
 	}
+	return sub, nil
 }
 
 func handle(msg *nats.Msg, datacenter string, layers []cachestore.Layer) {
