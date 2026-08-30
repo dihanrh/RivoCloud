@@ -14,8 +14,12 @@ import (
 // Config returned by RedisRegistry leaves it empty, since nothing
 // downstream reads Host off an already-resolved Config.
 type Config struct {
-	ID         string
-	Host       string
+	ID    string
+	Host  string
+	// OrgID is the owning organization, read from zone_config:{id}'s
+	// "orgId" field (written by the CDN Service's ZoneConfigPublisher).
+	// Empty for a Config built by StaticRegistry.
+	OrgID      string
 	OriginURL  string
 	DefaultTTL time.Duration
 	// Rules is this zone's cache rules, pre-sorted highest-priority-first
