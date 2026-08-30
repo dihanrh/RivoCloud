@@ -41,15 +41,21 @@ export class AnalyticsService {
     return zones.map((z) => z.id);
   }
 
-  // ClickHouse's DateTime/DateTime64 query-parameter binder (like its
-  // JSONEachRow insert parser) rejects RFC3339's `T`/`Z` suffix, so `from`/
-  // `to` are formatted as ClickHouse-native "YYYY-MM-DD HH:MM:SS.sss"
-  // instead of `Date#toISOString()`'s ISO 8601 form.
-  private range(query: AnalyticsQueryDto): { from: string; to: string } {
+  // Returns real `Date` objects, not formatted strings. `@clickhouse/client`
+  // serializes a `Date` query-parameter value as a time-zone-agnostic Unix
+  // timestamp (see its format_query_params.js's `value instanceof Date`
+  // branch), which ClickHouse parses unambiguously regardless of the
+  // server/session's default timezone. A space-separated string like
+  // "2026-06-29 00:00:00.000" (no offset) would instead be interpreted using
+  // that session default — which happens to be UTC only because the
+  // clickhouse-server Docker image defaults to UTC and nothing here pins
+  // TZ/session timezone explicitly. Binding real `Date` objects sidesteps
+  // that assumption entirely, matching `request_logs.timestamp`'s declared
+  // `DateTime64(3, 'UTC')` column type correctly under any server default.
+  private range(query: AnalyticsQueryDto): { from: Date; to: Date } {
     const to = query.to ? new Date(query.to) : new Date();
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - 24 * 60 * 60 * 1000);
-    const toChDateTime = (d: Date) => d.toISOString().replace('T', ' ').replace('Z', '');
-    return { from: toChDateTime(from), to: toChDateTime(to) };
+    return { from, to };
   }
 
   async overview(orgId: string, query: AnalyticsQueryDto) {
@@ -85,9 +91,12 @@ export class AnalyticsService {
         ORDER BY bucket
       `,
       // bandwidth_hourly.hour is a second-precision DateTime column (no
-      // fractional seconds), so the ".sss" from range() must be trimmed —
-      // same reasoning as geography's Date-column `.slice(0, 10)` below.
-      query_params: { zoneIds, from: from.slice(0, 19), to: to.slice(0, 19) },
+      // fractional seconds). Passing whole-second Unix integers (rather than
+      // the Date objects themselves, which the client would serialize with
+      // a ".sss" suffix whenever the millisecond component is non-zero)
+      // keeps this timezone-agnostic like the DateTime64 queries above,
+      // while guaranteeing a value DateTime's parser accepts outright.
+      query_params: { zoneIds, from: Math.floor(from.getTime() / 1000), to: Math.floor(to.getTime() / 1000) },
       format: 'JSONEachRow',
     });
     return { series: await resultSet.json() };
@@ -148,7 +157,12 @@ export class AnalyticsService {
         ORDER BY requests DESC
         LIMIT 20
       `,
-      query_params: { zoneIds, from: from.slice(0, 10), to: to.slice(0, 10) },
+      // The `date` column is a plain calendar-day `Date` type — no
+      // time-of-day, so no timezone ambiguity to worry about here. Deriving
+      // the day string from the Date object's UTC fields keeps this in sync
+      // with how `request_logs.timestamp` (DateTime64(3, 'UTC')) buckets by
+      // day elsewhere, rather than the server's local calendar day.
+      query_params: { zoneIds, from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) },
       format: 'JSONEachRow',
     });
     return { countries: await resultSet.json() };
