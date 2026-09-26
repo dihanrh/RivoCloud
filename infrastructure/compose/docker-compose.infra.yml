@@ -81,6 +81,11 @@ services:
       - "9009:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks: [rivocloud]
 
   nats:

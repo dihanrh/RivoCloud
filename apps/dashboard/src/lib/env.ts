@@ -5,6 +5,7 @@ const envSchema = z.object({
   IDENTITY_SERVICE_URL: z.string().url(),
   CDN_SERVICE_URL: z.string().url(),
   STORAGE_SERVICE_URL: z.string().url(),
+  ANALYTICS_SERVICE_URL: z.string().url(),
 });
 
 export type Env = z.infer<typeof envSchema>;

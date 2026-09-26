@@ -18,6 +18,7 @@ import (
 type redisConfig struct {
 	ID             string `json:"id"`
 	Slug           string `json:"slug"`
+	OrgID          string `json:"orgId"`
 	OriginURL      string `json:"originUrl"`
 	OriginProtocol string `json:"originProtocol"`
 	CacheTTL       int    `json:"cacheTtl"`
@@ -147,7 +148,7 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 		if jsonErr := json.Unmarshal([]byte(raw), &rc); jsonErr != nil {
 			log.Printf("zone: bad zone_config JSON for %q: %v", zoneID, jsonErr)
 		} else if rc.Enabled {
-			cfg = Config{ID: rc.ID, OriginURL: rc.OriginURL, DefaultTTL: time.Duration(rc.CacheTTL) * time.Second}
+			cfg = Config{ID: rc.ID, OrgID: rc.OrgID, OriginURL: rc.OriginURL, DefaultTTL: time.Duration(rc.CacheTTL) * time.Second}
 			rules, rulesOK := r.resolveRules(ctx, zoneID)
 			cfg.Rules = rules
 			if !rulesOK {

@@ -5,6 +5,7 @@ const REQUIRED = {
   IDENTITY_SERVICE_URL: 'http://localhost:3001',
   CDN_SERVICE_URL: 'http://localhost:3003',
   STORAGE_SERVICE_URL: 'http://localhost:3004',
+  ANALYTICS_SERVICE_URL: 'http://localhost:3006',
 };
 
 describe('getEnv', () => {

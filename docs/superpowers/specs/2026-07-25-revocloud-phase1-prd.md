@@ -151,7 +151,7 @@ The 16-stage build order from the EDD (Section 11, Development Order), unchanged
 | 6 | Dashboard MVP — auth pages, zone UI, storage UI | 1–3 | ✅ Done (6.1–6.3: auth, zone UI, storage UI) | 2, 4, 5 | [`dashboard-and-frontend.md`](../../concepts/dashboard-and-frontend.md) |
 | 7 | NATS Invalidation — cache invalidation + cache rules engine | 4 | ✅ Done (7.1–7.2: invalidation, cache rules) | 4 | [`cache-invalidation-and-messaging.md`](../../concepts/cache-invalidation-and-messaging.md) |
 | 8 | Custom Domains + TLS — Traefik Redis provider, DNS verification | 3 | ✅ Done | 4 | [`custom-domains-and-tls.md`](../../concepts/custom-domains-and-tls.md) |
-| 9 | Analytics — edge events to NATS, ClickHouse ingestion, charts | 5 | Not started | 3, 6 | [`analytics-and-clickhouse.md`](../../concepts/analytics-and-clickhouse.md) |
+| 9 | Analytics — edge events to NATS, ClickHouse ingestion, charts | 5 | ✅ Done | 3, 6 | [`analytics-and-clickhouse.md`](../../concepts/analytics-and-clickhouse.md) |
 | 10 | Signed URLs — HMAC generation + edge verification | 4 | Not started | 5 | [`signed-urls-and-hmac.md`](../../concepts/signed-urls-and-hmac.md) |
 | 11 | Security + RBAC — roles, audit logging, rate limiting | 6 | Not started | 2 | [`security-rbac-and-audit-logging.md`](../../concepts/security-rbac-and-audit-logging.md) |
 | 12 | Billing — Stripe Checkout, webhooks, plan limits | 7 | Not started | 2, 9 | [`billing-and-stripe.md`](../../concepts/billing-and-stripe.md) |

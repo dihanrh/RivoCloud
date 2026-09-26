@@ -221,3 +221,20 @@ func TestRedisRegistry_MissingRulesKeyResolvesWithNoRules(t *testing.T) {
 		t.Fatalf("expected no rules, got %+v", cfg.Rules)
 	}
 }
+
+func TestRedisRegistry_ResolvesOrgID(t *testing.T) {
+	client := newTestRedisClient(t)
+	seedZoneConfig(t, client, "org-zone.cdn.rivocloud.dev", "zone-org-1", redisConfig{
+		ID: "zone-org-1", Slug: "org-zone", OriginURL: "https://api.example.com",
+		OrgID: "org-abc123", CacheTTL: 3600, Enabled: true,
+	})
+
+	registry := NewRedisRegistry(client)
+	cfg, ok := registry.Resolve("org-zone.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to resolve")
+	}
+	if cfg.OrgID != "org-abc123" {
+		t.Fatalf("expected OrgID %q, got %q", "org-abc123", cfg.OrgID)
+	}
+}

@@ -7,6 +7,7 @@ export const envSchema = baseEnvSchema.extend({
   EDGE_HOSTNAME: z.string().min(1).toLowerCase().default('edge.rivocloud.dev'),
   DOMAIN_DNS_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(30),
   DOMAIN_SSL_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(15),
+  CLICKHOUSE_URL: z.string().url(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
