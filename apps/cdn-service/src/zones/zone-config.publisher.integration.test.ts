@@ -8,7 +8,7 @@ import type { AppEnv } from '../env.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
 const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
-const publisher = new ZoneConfigPublisher(redis, { CDN_ROOT_DOMAIN: 'cdn.rivocloud.dev' } as AppEnv, events);
+const publisher = new ZoneConfigPublisher(redis, { CDN_ROOT_DOMAIN: 'cdn.rivocloud.dev', ZONE_SECRET_ENCRYPTION_KEY: 'c'.repeat(64) } as AppEnv, events);
 
 async function seedZone() {
   const user = await prisma.user.create({ data: { email: `${randomUUID()}@example.com`, name: 'Owner' } });

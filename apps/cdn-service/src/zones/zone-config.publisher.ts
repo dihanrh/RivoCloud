@@ -5,6 +5,8 @@ import { REDIS } from '../redis/redis.module.js';
 import { APP_ENV } from '../app-env.token.js';
 import type { AppEnv } from '../env.js';
 import { EventsService } from '../events/events.service.js';
+import { decryptSecret } from '../signing/secret-box.js';
+import { zoneHostname } from './zone-hostname.js';
 
 @Injectable()
 export class ZoneConfigPublisher {
@@ -24,6 +26,13 @@ export class ZoneConfigPublisher {
       cacheTtl: zone.cacheTtl,
       browserTtl: zone.browserTtl,
       enabled: zone.enabled,
+      signedUrlsRequired: zone.signedUrlsRequired,
+      // The edge verifies signatures locally, so it needs the raw secret —
+      // Redis is the one place it leaves this service (EDD Section 5.5). It
+      // is only published while the zone actually enforces signed URLs; a
+      // zone that requires them with no secret makes the edge fail closed.
+      ...(zone.signedUrlsRequired &&
+        zone.signingSecret && { signingSecret: decryptSecret(zone.signingSecret, this.env.ZONE_SECRET_ENCRYPTION_KEY) }),
     };
     await this.redis.set(`zone_config:${zone.id}`, JSON.stringify(config));
     await this.redis.set(`zone_host:${this.hostFor(zone)}`, zone.id);
@@ -36,11 +45,6 @@ export class ZoneConfigPublisher {
   }
 
   private hostFor(zone: PullZone): string {
-    // pull_zones.slug is only unique per-org (@@unique([orgId, slug])), but
-    // this host is a single global DNS namespace shared by every tenant —
-    // appending a slice of the zone's own UUID makes it globally unique by
-    // construction, so two orgs naming a zone the same thing can never
-    // collide, overwrite, or delete each other's edge hostname.
-    return `${zone.slug}-${zone.id.slice(0, 8)}.${this.env.CDN_ROOT_DOMAIN}`;
+    return zoneHostname(zone, this.env.CDN_ROOT_DOMAIN);
   }
 }

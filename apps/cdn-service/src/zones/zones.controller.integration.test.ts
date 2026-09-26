@@ -128,4 +128,37 @@ describe('ZonesController', () => {
       .set('Authorization', 'Bearer whatever');
     expect(getAfterDelete.status).toBe(404);
   });
+
+  it('enables signed URLs and rotates the secret without ever returning it', async () => {
+    await seedOrgAndAuth('admin');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/zones')
+      .set('Authorization', 'Bearer whatever')
+      .send({ name: 'Private', originUrl: 'https://private.example.com' });
+
+    const enabled = await request(app.getHttpServer())
+      .patch(`/api/v1/zones/${created.body.id}`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ signedUrlsRequired: true });
+    expect(enabled.status).toBe(200);
+    expect(enabled.body).toMatchObject({ signedUrlsRequired: true, hasSigningSecret: true });
+    expect(enabled.body).not.toHaveProperty('signingSecret');
+
+    const rotated = await request(app.getHttpServer())
+      .post(`/api/v1/zones/${created.body.id}/signing-secret/rotate`)
+      .set('Authorization', 'Bearer whatever');
+    expect(rotated.status).toBe(201);
+    expect(rotated.body.hasSigningSecret).toBe(true);
+    expect(rotated.body).not.toHaveProperty('signingSecret');
+  });
+
+  it('rejects a viewer trying to rotate the signing secret', async () => {
+    const org = await seedOrgAndAuth('owner');
+    const zone = await prisma.pullZone.create({ data: { orgId: org.id, name: 'Z', slug: 'z', originUrl: 'https://z.example.com' } });
+    fakeIdentity.nextAuth = { ...fakeIdentity.nextAuth!, role: 'viewer' };
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/zones/${zone.id}/signing-secret/rotate`)
+      .set('Authorization', 'Bearer whatever');
+    expect(response.status).toBe(403);
+  });
 });

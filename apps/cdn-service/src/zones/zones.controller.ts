@@ -43,6 +43,14 @@ export class ZonesController {
     return this.zones.update(requireOrgId(auth), zoneId, dto);
   }
 
+  // Replaces the zone's signing secret — every outstanding signed URL for the
+  // zone stops verifying as soon as edges pick up the republished config.
+  @Post(':zoneId/signing-secret/rotate')
+  @RequireZoneScope('write')
+  rotateSigningSecret(@AuthCtx() auth: CombinedAuthContext, @Param('zoneId') zoneId: string) {
+    return this.zones.rotateSigningSecret(requireOrgId(auth), zoneId);
+  }
+
   @Delete(':zoneId')
   @RequireZoneScope('delete')
   async remove(@AuthCtx() auth: CombinedAuthContext, @Param('zoneId') zoneId: string) {

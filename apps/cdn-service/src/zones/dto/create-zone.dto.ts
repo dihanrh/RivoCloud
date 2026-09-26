@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsUrl, Min, MinLength, MaxLength, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsUrl, Min, MinLength, MaxLength, IsString } from 'class-validator';
 
 export class CreateZoneDto {
   @IsString()
@@ -22,4 +22,8 @@ export class CreateZoneDto {
   @IsInt()
   @Min(0)
   browserTtl?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  signedUrlsRequired?: boolean;
 }
