@@ -1,6 +1,6 @@
 # Analytics & ClickHouse — Explained for Beginners
 
-This document explains **Stage 9 (Analytics)** of RivoCloud's Phase 1 build order — the pipeline that turns raw, individual visitor requests into the bandwidth graphs, cache-hit-ratio charts, and latency numbers a customer sees on their dashboard. **Stage 9 has not been built yet.** Nothing described here exists in the codebase today — this is a concept guide for *what will be built and why*, grounded in:
+This document explains **Stage 9 (Analytics)** of RivoCloud's Phase 1 build order — the pipeline that turns raw, individual visitor requests into the bandwidth graphs, cache-hit-ratio charts, and latency numbers a customer sees on their dashboard. Everything below describes what was built, matching the design in:
 
 - [`superpowers/specs/2026-07-25-revocloud-phase1-prd.md`](../superpowers/specs/2026-07-25-revocloud-phase1-prd.md) — Section 5.7 (Analytics requirements) and Section 7 (roadmap, where Analytics is stage 9 of 16, targeted for Month 5)
 - [`superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md`](../superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md) — Section 2.5 (Analytics Service design), Section 6.6 (ClickHouse table schemas), Section 7.7 (analytics API endpoints), and Section 11 block 9 (the exact build steps: 9.1–9.4)
