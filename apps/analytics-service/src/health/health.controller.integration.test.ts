@@ -17,9 +17,12 @@ describe('HealthController', () => {
     await app.close();
   });
 
-  it('returns ok', async () => {
+  it('returns ok with the ingestion pipeline reported as connected', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/health');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: 'ok' });
+    expect(response.body).toEqual({
+      status: 'ok',
+      ingestion: { natsConnected: true, lastConnectedAt: expect.any(String) },
+    });
   });
 });

@@ -45,10 +45,13 @@ describe('IngestionService', () => {
   });
 
   it('a failed insertBatch does not throw out of flush', async () => {
+    const errorSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const insertBatch = vi.fn().mockRejectedValue(new Error('clickhouse down'));
     const service = new IngestionService('nats://unused', { insertBatch } as unknown as RequestLogWriter);
     service.enqueue(makeEvent());
     await expect(service.flush()).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('clickhouse down'));
+    errorSpy.mockRestore();
   });
 
   it('a subscription iterator that rejects does not throw out of consume()', async () => {
@@ -62,5 +65,26 @@ describe('IngestionService', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('connection lost'));
 
     errorSpy.mockRestore();
+  });
+
+  it('reports ingestion as not connected before any NATS connection exists', () => {
+    const service = new IngestionService('nats://unused', { insertBatch: vi.fn() } as unknown as RequestLogWriter);
+    expect(service.health()).toEqual({ natsConnected: false, lastConnectedAt: null });
+  });
+
+  it('an unreachable NATS at startup does not fail bootstrap, logs a distinct warning, and shuts down cleanly', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    // Nothing listens on port 1, so the first connect fails fast.
+    const service = new IngestionService('nats://127.0.0.1:1', { insertBatch: vi.fn() } as unknown as RequestLogWriter);
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('INGESTION UNHEALTHY'));
+    expect(service.health().natsConnected).toBe(false);
+
+    // The background retry loop must be cancellable: destroy resolves
+    // promptly instead of leaving a dial loop running.
+    await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+
+    warnSpy.mockRestore();
   });
 });
