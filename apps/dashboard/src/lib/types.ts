@@ -75,3 +75,45 @@ export interface StorageObject {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AnalyticsOverview {
+  bytesSent: number;
+  requests: number;
+  hitRatio: number;
+}
+
+export interface AnalyticsBandwidth {
+  series: { bucket: string; bytesSent: number; requests: number }[];
+}
+
+export interface AnalyticsRequests {
+  series: { bucket: string; requests: number }[];
+}
+
+export interface AnalyticsCache {
+  hitRatio: number;
+  breakdown: { cacheStatus: string; requests: number }[];
+}
+
+export interface AnalyticsGeography {
+  countries: { country: string; requests: number; bytesSent: number }[];
+}
+
+export interface AnalyticsLatency {
+  series: { bucket: string; p50: number; p95: number; p99: number }[];
+}
+
+export interface AnalyticsStatusCodes {
+  breakdown: { statusCode: number; requests: number }[];
+}
+
+export interface AnalyticsTopPaths {
+  paths: { path: string; requests: number; bytesSent: number }[];
+}
+
+export interface AnalyticsQueryParams {
+  zoneId?: string;
+  from?: string;
+  to?: string;
+  granularity?: 'hour' | 'day' | 'week';
+}
