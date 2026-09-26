@@ -6,6 +6,7 @@ import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
 import { IdentityClient } from '../auth/identity-client.js';
+import { CdnClient } from '../cdn/cdn-client.js';
 import type { CombinedAuthContext } from '../auth/auth-context.decorator.js';
 
 const WEBHOOK_TOKEN = process.env.MINIO_WEBHOOK_AUTH_TOKEN ?? 'dev_minio_webhook_token_change_me';
@@ -31,6 +32,8 @@ describe('ObjectsController', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(IdentityClient)
       .useValue(fakeIdentity)
+      .overrideProvider(CdnClient)
+      .useValue({ signUrl: async (_zoneId: string, body: { path: string; expires: number }) => ({ url: `https://zone.cdn.test${body.path}?expires=${body.expires}&sig=fakesig` }) })
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -168,5 +171,32 @@ describe('ObjectsController', () => {
     expect(response.body.status).toBe('ready');
     expect(typeof response.body.size).toBe('string');
     expect(response.body.size).toBe('555');
+  });
+
+  it('signs a ready object for a viewer and validates the request body', async () => {
+    const { bucketId } = await seedOrgBucketAndAuth('viewer');
+    const object = await prisma.storageObject.create({
+      data: { bucketId, key: 'hello.txt', storagePath: `x/hello.txt/${randomUUID()}`, status: 'ready' },
+    });
+
+    const signed = await request(app.getHttpServer())
+      .post(`/api/v1/buckets/${bucketId}/objects/${object.key}/sign`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ zoneId: randomUUID(), expiresIn: 600 });
+    expect(signed.status).toBe(200);
+    expect(signed.body.url).toMatch(/^https:\/\/zone\.cdn\.test\/hello\.txt\?expires=\d+&sig=fakesig$/);
+    expect(typeof signed.body.expiresAt).toBe('string');
+
+    const badZone = await request(app.getHttpServer())
+      .post(`/api/v1/buckets/${bucketId}/objects/${object.key}/sign`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ zoneId: 'not-a-uuid' });
+    expect(badZone.status).toBe(400);
+
+    const tooLong = await request(app.getHttpServer())
+      .post(`/api/v1/buckets/${bucketId}/objects/${object.key}/sign`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ zoneId: randomUUID(), expiresIn: 604801 });
+    expect(tooLong.status).toBe(400);
   });
 });

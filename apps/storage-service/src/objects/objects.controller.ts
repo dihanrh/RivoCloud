@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth-guard.js';
 import { RequireStorageScope, StorageScopeGuard } from '../auth/storage-scope.guard.js';
 import { AuthCtx, type CombinedAuthContext } from '../auth/auth-context.decorator.js';
 import { ObjectsService } from './objects.service.js';
 import { InitiateUploadDto } from './dto/initiate-upload.dto.js';
 import { ListObjectsDto } from './dto/list-objects.dto.js';
+import { SignObjectDto } from './dto/sign-object.dto.js';
 
 function requireOrgId(auth: CombinedAuthContext): string {
   if (!auth.orgId) {
@@ -38,6 +39,20 @@ export class ObjectsController {
   @RequireStorageScope('read')
   get(@AuthCtx() auth: CombinedAuthContext, @Param('bucketId') bucketId: string, @Param('key') key: string) {
     return this.objects.getForOrg(requireOrgId(auth), bucketId, key);
+  }
+
+  // A share link exposes nothing a read-scoped caller can't already see, so
+  // generating one needs read, not write.
+  @Post(':key/sign')
+  @HttpCode(200)
+  @RequireStorageScope('read')
+  sign(
+    @AuthCtx() auth: CombinedAuthContext,
+    @Param('bucketId') bucketId: string,
+    @Param('key') key: string,
+    @Body() dto: SignObjectDto,
+  ) {
+    return this.objects.sign(requireOrgId(auth), bucketId, key, dto);
   }
 
   @Delete(':key')
