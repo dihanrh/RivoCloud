@@ -82,12 +82,14 @@ export interface AnalyticsOverview {
   hitRatio: number;
 }
 
+// Time-series `bucket` values are UTC epoch milliseconds (unambiguous for
+// `new Date(bucket)`), not naive "YYYY-MM-DD HH:MM:SS" strings.
 export interface AnalyticsBandwidth {
-  series: { bucket: string; bytesSent: number; requests: number }[];
+  series: { bucket: number; bytesSent: number; requests: number }[];
 }
 
 export interface AnalyticsRequests {
-  series: { bucket: string; requests: number }[];
+  series: { bucket: number; requests: number }[];
 }
 
 export interface AnalyticsCache {
@@ -100,7 +102,7 @@ export interface AnalyticsGeography {
 }
 
 export interface AnalyticsLatency {
-  series: { bucket: string; p50: number; p95: number; p99: number }[];
+  series: { bucket: number; p50: number; p95: number; p99: number }[];
 }
 
 export interface AnalyticsStatusCodes {

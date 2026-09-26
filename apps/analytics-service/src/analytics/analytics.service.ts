@@ -16,6 +16,20 @@ function bucketFn(granularity: 'hour' | 'day' | 'week' = 'hour'): string {
   }
 }
 
+// A time-series bucket as epoch milliseconds (UTC), not ClickHouse's default
+// naive "YYYY-MM-DD HH:MM:SS" string — which carries no offset, so browsers'
+// `new Date(...)` parse it as *local* time (and older WebKit rejects it
+// outright). Epoch-ms is unambiguous and goes straight into `new Date(ms)`.
+// The toDateTime(..., 'UTC') wrap matters for toStartOfWeek, which returns a
+// `Date` (calendar day) rather than a DateTime: pinning it to UTC midnight
+// keeps week buckets consistent with the hour/day ones, and every source
+// column (request_logs.timestamp, bandwidth_hourly.hour) is itself UTC.
+// toUnixTimestamp(...) * 1000 is a UInt64, emitted as a JSON number via the
+// client's output_format_json_quote_64bit_integers = 0 (clickhouse.module.ts).
+function bucketExpr(fn: string, column: string): string {
+  return `toUnixTimestamp(toDateTime(${fn}(${column}), 'UTC')) * 1000`;
+}
+
 @Injectable()
 export class AnalyticsService {
   constructor(
@@ -71,7 +85,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    const [row] = await resultSet.json<{ bytesSent: string; requests: string; cacheHits: string }>();
+    const [row] = await resultSet.json<{ bytesSent: number; requests: number; cacheHits: number }>();
     const requests = Number(row?.requests ?? 0);
     const cacheHits = Number(row?.cacheHits ?? 0);
     return { bytesSent: Number(row?.bytesSent ?? 0), requests, hitRatio: requests > 0 ? cacheHits / requests : 0 };
@@ -84,7 +98,7 @@ export class AnalyticsService {
     const bucket = bucketFn(query.granularity);
     const resultSet = await this.ch.query({
       query: `
-        SELECT ${bucket}(hour) AS bucket, sum(bytes_sent) AS bytesSent, sum(requests) AS requests
+        SELECT ${bucketExpr(bucket, 'hour')} AS bucket, sum(bytes_sent) AS bytesSent, sum(requests) AS requests
         FROM bandwidth_hourly
         WHERE zone_id IN {zoneIds:Array(String)} AND hour BETWEEN {from:DateTime} AND {to:DateTime}
         GROUP BY bucket
@@ -99,7 +113,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from: Math.floor(from.getTime() / 1000), to: Math.floor(to.getTime() / 1000) },
       format: 'JSONEachRow',
     });
-    return { series: await resultSet.json() };
+    return { series: await resultSet.json<{ bucket: number; bytesSent: number; requests: number }>() };
   }
 
   async requests(orgId: string, query: AnalyticsQueryDto) {
@@ -109,7 +123,7 @@ export class AnalyticsService {
     const bucket = bucketFn(query.granularity);
     const resultSet = await this.ch.query({
       query: `
-        SELECT ${bucket}(timestamp) AS bucket, count() AS requests
+        SELECT ${bucketExpr(bucket, 'timestamp')} AS bucket, count() AS requests
         FROM request_logs
         WHERE zone_id IN {zoneIds:Array(String)} AND timestamp BETWEEN {from:DateTime64(3)} AND {to:DateTime64(3)}
         GROUP BY bucket
@@ -118,7 +132,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    return { series: await resultSet.json() };
+    return { series: await resultSet.json<{ bucket: number; requests: number }>() };
   }
 
   async cache(orgId: string, query: AnalyticsQueryDto) {
@@ -135,7 +149,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    const breakdown = await resultSet.json<{ cacheStatus: string; requests: string }>();
+    const breakdown = await resultSet.json<{ cacheStatus: string; requests: number }>();
     const total = breakdown.reduce((sum, row) => sum + Number(row.requests), 0);
     const hits = breakdown.find((row) => row.cacheStatus === 'HIT');
     return {
@@ -165,7 +179,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) },
       format: 'JSONEachRow',
     });
-    return { countries: await resultSet.json() };
+    return { countries: await resultSet.json<{ country: string; requests: number; bytesSent: number }>() };
   }
 
   async latency(orgId: string, query: AnalyticsQueryDto) {
@@ -176,7 +190,7 @@ export class AnalyticsService {
     const resultSet = await this.ch.query({
       query: `
         SELECT
-          ${bucket}(timestamp) AS bucket,
+          ${bucketExpr(bucket, 'timestamp')} AS bucket,
           quantile(0.50)(duration_ms) AS p50,
           quantile(0.95)(duration_ms) AS p95,
           quantile(0.99)(duration_ms) AS p99
@@ -188,7 +202,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    return { series: await resultSet.json() };
+    return { series: await resultSet.json<{ bucket: number; p50: number; p95: number; p99: number }>() };
   }
 
   async statusCodes(orgId: string, query: AnalyticsQueryDto) {
@@ -206,7 +220,7 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    return { breakdown: await resultSet.json() };
+    return { breakdown: await resultSet.json<{ statusCode: number; requests: number }>() };
   }
 
   async topPaths(orgId: string, query: AnalyticsQueryDto) {
@@ -225,6 +239,6 @@ export class AnalyticsService {
       query_params: { zoneIds, from, to },
       format: 'JSONEachRow',
     });
-    return { paths: await resultSet.json() };
+    return { paths: await resultSet.json<{ path: string; requests: number; bytesSent: number }>() };
   }
 }

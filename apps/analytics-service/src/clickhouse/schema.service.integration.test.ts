@@ -26,4 +26,14 @@ describe('SchemaService', () => {
     }
     await client.close();
   });
+
+  it("buckets bandwidth_hourly.hour in UTC, like request_logs.timestamp", async () => {
+    const client = createClient({ url: process.env.CLICKHOUSE_URL ?? 'http://localhost:8123' });
+    const resultSet = await client.query({
+      query: "SELECT type FROM system.columns WHERE database = currentDatabase() AND table = 'bandwidth_hourly' AND name = 'hour'",
+      format: 'JSONEachRow',
+    });
+    expect(await resultSet.json()).toEqual([{ type: "DateTime('UTC')" }]);
+    await client.close();
+  });
 });

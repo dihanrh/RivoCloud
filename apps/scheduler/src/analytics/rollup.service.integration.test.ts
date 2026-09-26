@@ -40,12 +40,18 @@ describe('RollupService', () => {
     await rollup.rollupBandwidthForPreviousHour(now);
 
     const resultSet = await ch.query({
-      query: 'SELECT bytes_sent, requests, cache_hits, cache_misses FROM bandwidth_hourly WHERE zone_id = {zoneId:String}',
+      query: `
+        SELECT toUnixTimestamp(hour) AS hour_epoch, bytes_sent, requests, cache_hits, cache_misses
+        FROM bandwidth_hourly WHERE zone_id = {zoneId:String}
+      `,
       query_params: { zoneId },
       format: 'JSONEachRow',
     });
-    const rows = await resultSet.json<{ bytes_sent: string; requests: string; cache_hits: string; cache_misses: string }>();
+    const rows = await resultSet.json<{ hour_epoch: number; bytes_sent: string; requests: string; cache_hits: string; cache_misses: string }>();
     expect(rows).toHaveLength(1);
+    // bandwidth_hourly.hour is DateTime('UTC'): the stored bucket is exactly
+    // 14:00 UTC regardless of the ClickHouse server's default timezone.
+    expect(Number(rows[0].hour_epoch)).toBe(Date.UTC(2026, 6, 1, 14) / 1000);
     expect(Number(rows[0].bytes_sent)).toBe(300);
     expect(Number(rows[0].requests)).toBe(2);
     expect(Number(rows[0].cache_hits)).toBe(1);
