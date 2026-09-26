@@ -14,8 +14,8 @@ import (
 // Config returned by RedisRegistry leaves it empty, since nothing
 // downstream reads Host off an already-resolved Config.
 type Config struct {
-	ID    string
-	Host  string
+	ID   string
+	Host string
 	// OrgID is the owning organization, read from zone_config:{id}'s
 	// "orgId" field (written by the CDN Service's ZoneConfigPublisher).
 	// Empty for a Config built by StaticRegistry.
@@ -26,6 +26,12 @@ type Config struct {
 	// (Stage 7), read from zone_rules:{ID} in Redis. Empty for a zone with
 	// no rules configured, or for a Config built by StaticRegistry.
 	Rules []cacherules.Rule
+	// SignedURLsRequired makes the edge reject any request without a valid
+	// expires/sig pair (Stage 10, EDD Section 5.5). SigningSecret is the raw
+	// HMAC key the CDN Service publishes alongside it; a zone that requires
+	// signatures with an empty secret fails closed.
+	SignedURLsRequired bool
+	SigningSecret      string
 }
 
 // Registry resolves an inbound request's Host header to a zone Config.
