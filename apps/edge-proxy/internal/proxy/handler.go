@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -570,15 +571,27 @@ func (h *CachingHandler) recordEvent(r *http.Request, z zone.Config, rec *status
 // anywhere in this codebase (no distributed edge yet — PRD Stage 12), so
 // this header is the accepted placeholder source of truth for the "country"
 // analytics dimension until a real GeoDNS layer sets it instead.
+//
+// The header is client-supplied and therefore untrusted: request_logs.country
+// is a ClickHouse FixedString(2), and a single out-of-shape value (e.g. "USA"
+// or non-ASCII bytes) makes ClickHouse reject the ENTIRE JSONEachRow batch
+// insert it lands in — taking other tenants' legitimate events down with it.
+// So only an exact two-ASCII-letter value is honored; anything else is
+// ignored as if the header were absent. The configured fallback gets the same
+// check so a misconfigured EDGE_DEFAULT_COUNTRY can't poison batches either.
 func requestCountry(r *http.Request, fallback string) string {
-	if c := r.Header.Get("X-RivoCloud-Country"); c != "" {
+	if c := r.Header.Get("X-RivoCloud-Country"); countryCodePattern.MatchString(c) {
 		return strings.ToUpper(c)
 	}
-	if fallback != "" {
-		return fallback
+	if countryCodePattern.MatchString(fallback) {
+		return strings.ToUpper(fallback)
 	}
 	return "ZZ"
 }
+
+// countryCodePattern matches exactly two ASCII letters (an ISO 3166-1
+// alpha-2-shaped code, case-insensitive).
+var countryCodePattern = regexp.MustCompile(`^[A-Za-z]{2}$`)
 
 // hashClientIP SHA-256 hashes the client's IP so analytics never stores a
 // real visitor's address (EDD Section 2.5's client_ip_hash field).

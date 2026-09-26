@@ -98,3 +98,56 @@ func TestCachingHandler_HonorsXRivoCloudCountryHeader(t *testing.T) {
 		t.Fatalf("expected header-provided country to be upper-cased to DE, got %q", fake.events[0].Country)
 	}
 }
+
+func TestCachingHandler_IgnoresMalformedXRivoCloudCountryHeader(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer origin.Close()
+
+	zones := zone.NewStaticRegistry([]zone.Config{{ID: "z1", Host: "demo.test", OriginURL: origin.URL}})
+
+	for _, bad := range []string{"USA", "D", "1A", "D-", "ÄÖ", " de", "de "} {
+		t.Run(bad, func(t *testing.T) {
+			fake := &fakeEventPublisher{}
+			h := &CachingHandler{Zones: zones, Origin: http.DefaultClient, Analytics: fake, DefaultCountry: "NL"}
+
+			req := httptest.NewRequest("GET", "http://demo.test/x", nil)
+			req.Host = "demo.test"
+			req.Header.Set("X-RivoCloud-Country", bad)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if len(fake.events) != 1 {
+				t.Fatalf("expected exactly 1 published event, got %d", len(fake.events))
+			}
+			if fake.events[0].Country != "NL" {
+				t.Fatalf("expected malformed header %q to fall back to the default NL, got %q", bad, fake.events[0].Country)
+			}
+		})
+	}
+}
+
+func TestCachingHandler_MalformedDefaultCountryFallsBackToZZ(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer origin.Close()
+
+	zones := zone.NewStaticRegistry([]zone.Config{{ID: "z1", Host: "demo.test", OriginURL: origin.URL}})
+	fake := &fakeEventPublisher{}
+	h := &CachingHandler{Zones: zones, Origin: http.DefaultClient, Analytics: fake, DefaultCountry: "USA"}
+
+	req := httptest.NewRequest("GET", "http://demo.test/x", nil)
+	req.Host = "demo.test"
+	req.Header.Set("X-RivoCloud-Country", "not-a-country")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if len(fake.events) != 1 {
+		t.Fatalf("expected exactly 1 published event, got %d", len(fake.events))
+	}
+	if fake.events[0].Country != "ZZ" {
+		t.Fatalf("expected a malformed default country to fall back to ZZ, got %q", fake.events[0].Country)
+	}
+}
