@@ -87,6 +87,7 @@ jobs:
       MINIO_ROOT_USER: rivocloud
       MINIO_ROOT_PASSWORD: rivocloud_dev_password
       MINIO_WEBHOOK_AUTH_TOKEN: ci_minio_webhook_token_placeholder
+      ZONE_SECRET_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
     steps:
       - uses: actions/checkout@v4
       - name: Start MinIO
