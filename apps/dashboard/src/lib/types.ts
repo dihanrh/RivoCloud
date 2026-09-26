@@ -30,6 +30,10 @@ export interface Zone {
   cacheTtl: number;
   browserTtl: number;
   enabled: boolean;
+  // The edge rejects requests without a valid expires/sig pair. The secret
+  // itself is never sent to the browser; hasSigningSecret only says one exists.
+  signedUrlsRequired: boolean;
+  hasSigningSecret: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +78,11 @@ export interface StorageObject {
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SignedUrl {
+  url: string;
+  expiresAt: string;
 }
 
 export interface AnalyticsOverview {

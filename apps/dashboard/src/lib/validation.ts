@@ -28,6 +28,7 @@ export type CreateZoneInput = z.infer<typeof createZoneSchema>;
 
 export const updateZoneSchema = createZoneSchema.partial().extend({
   enabled: z.boolean().optional(),
+  signedUrlsRequired: z.boolean().optional(),
 });
 export type UpdateZoneInput = z.infer<typeof updateZoneSchema>;
 
