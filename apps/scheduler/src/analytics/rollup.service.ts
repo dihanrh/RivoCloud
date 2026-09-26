@@ -8,11 +8,28 @@ export class RollupService {
 
   constructor(@Inject(CLICKHOUSE) private readonly ch: ClickHouseClient) {}
 
-  // Rolls up the full hour immediately before `now` — e.g. run at 14:03, it
+  // Rolls up the full hour immediately before `now` — e.g. run at 14:05, it
   // rolls up [13:00, 14:00). ClickHouse's own INSERT INTO ... SELECT does
-  // the aggregation server-side; SummingMergeTree merges same-key rows in
-  // the background, so a re-run for the same hour is safe (this plan's
-  // Design Decision 6).
+  // the aggregation server-side.
+  //
+  // Two distinct concerns, handled differently:
+  //
+  // 1. Re-running for an already-rolled-up window is NOT a safe no-op.
+  //    SummingMergeTree merges same-key rows by *summing* them, so a second
+  //    run for the same hour inserts the same totals again and they are
+  //    added on top — the hour's bytes/requests double. It does not
+  //    deduplicate. This is the accepted approximate-idempotency tradeoff of
+  //    this plan's Design Decision 6: each window must be rolled up exactly
+  //    once, and there is no safe "catch-up" re-run.
+  //
+  // 2. Events still sitting in analytics-service's in-memory ingestion
+  //    buffer (flushed every <= 5s) when this runs would be missed for good,
+  //    precisely because of (1). That buffer-lag loss is what the cron's
+  //    5-minutes-past-the-hour schedule protects against
+  //    (RollupCron.handleHourlyBandwidth), not anything in this method.
+  //
+  // The same two points apply to rollupCountryForPreviousDay below, whose
+  // 1 AM schedule already leaves an hour of headroom for (2).
   async rollupBandwidthForPreviousHour(now: Date = new Date()): Promise<void> {
     const hourStart = new Date(now);
     hourStart.setUTCMinutes(0, 0, 0);
