@@ -31,6 +31,7 @@ function toApiKeyView(key: ApiKey) {
     name: key.name,
     keyPrefix: key.keyPrefix,
     permissions: key.permissions,
+    userId: key.userId,
     lastUsedAt: key.lastUsedAt,
     expiresAt: key.expiresAt,
   };

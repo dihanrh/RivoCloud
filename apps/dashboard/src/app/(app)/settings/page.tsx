@@ -46,7 +46,7 @@ export default function SettingsPage() {
       <Card>
         <CardContent className="pt-6">
           {tab === 'members' && <MembersPanel orgId={me.orgId} role={me.role} />}
-          {tab === 'api-keys' && <ApiKeysPanel role={me.role} />}
+          {tab === 'api-keys' && <ApiKeysPanel role={me.role} meId={me.id} />}
           {tab === 'audit-log' && canViewAuditLog(me.role) && <AuditLogPanel orgId={me.orgId} />}
         </CardContent>
       </Card>

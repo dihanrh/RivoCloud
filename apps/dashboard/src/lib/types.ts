@@ -154,6 +154,8 @@ export interface ApiKey {
   name: string;
   keyPrefix: string;
   permissions: string[];
+  // Creator of the key; null when the creating user was deleted.
+  userId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
 }

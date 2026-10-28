@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { clientForwardHeaders } from '@/lib/forwarded-headers';
 import { getEnv } from '@/lib/env';
 import { backendFetch } from '@/lib/backend-fetch';
 import { clearSessionCookies } from '@/lib/auth-session';
@@ -14,6 +15,7 @@ export async function POST() {
       await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/logout', {
         method: 'POST',
         body: JSON.stringify({ refreshToken }),
+        headers: await clientForwardHeaders(),
       });
     } catch {
       // best-effort: the cookies are cleared regardless of whether the backend call succeeds

@@ -131,6 +131,7 @@ describe('API Keys', () => {
     const listed = list.body.find((key: { id: string }) => key.id === devKey);
     expect(Object.keys(withinRole.body).sort()).toEqual(Object.keys(listed).sort());
     expect(withinRole.body.permissions).toEqual(['cache:invalidate']);
+    expect(listed.userId).toBe(stored.userId);
   });
 
   it("developer cannot revoke another member's key, admin can, developer can revoke own key", async () => {

@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiKeysPanel } from './api-keys-panel';
 
-function renderPanel(role: string) {
+function renderPanel(role: string, meId = 'me-1') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ApiKeysPanel role={role} />
+      <ApiKeysPanel role={role} meId={meId} />
     </QueryClientProvider>,
   );
 }
@@ -28,7 +28,8 @@ describe('ApiKeysPanel', () => {
           ? new Response(JSON.stringify({ success: true }), { status: 200 })
           : new Response(
               JSON.stringify([
-                { id: 'k0', name: 'deploy', keyPrefix: 'rivo_0000', permissions: ['zone:read'], lastUsedAt: null, expiresAt: null },
+                { id: 'k0', name: 'deploy', keyPrefix: 'rivo_0000', permissions: ['zone:read'], userId: 'me-1', lastUsedAt: null, expiresAt: null },
+                { id: 'k9', name: 'theirs', keyPrefix: 'rivo_9999', permissions: ['zone:read'], userId: 'other', lastUsedAt: null, expiresAt: null },
               ]),
               { status: 200 },
             ),
@@ -68,6 +69,19 @@ describe('ApiKeysPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByDisplayValue('rivo_secret_value')).not.toBeInTheDocument();
+  });
+
+  it('developer sees Revoke only on own keys', async () => {
+    renderPanel('developer');
+    await screen.findByText('theirs');
+    expect(screen.getByRole('button', { name: 'Revoke deploy' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Revoke theirs' })).not.toBeInTheDocument();
+  });
+
+  it('owner and admin see Revoke on every key', async () => {
+    renderPanel('admin');
+    await screen.findByText('theirs');
+    expect(screen.getByRole('button', { name: 'Revoke theirs' })).toBeInTheDocument();
   });
 
   it('asks for confirmation before revoking', async () => {

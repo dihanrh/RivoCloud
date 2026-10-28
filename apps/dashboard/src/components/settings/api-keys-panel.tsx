@@ -119,7 +119,7 @@ function CreateKeyDialog({ role }: { role: OrgRole }) {
   );
 }
 
-export function ApiKeysPanel({ role }: { role: string | null }) {
+export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string }) {
   const { data: keys, isLoading, error } = useApiKeys();
   const revoke = useRevokeApiKey();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -136,6 +136,8 @@ export function ApiKeysPanel({ role }: { role: string | null }) {
     }
   }
 
+  // Owners and admins may revoke any key; everyone else only their own.
+  const canRevokeAny = role === 'owner' || role === 'admin';
   const orgRole = (role ?? 'viewer') as OrgRole;
 
   return (
@@ -166,7 +168,7 @@ export function ApiKeysPanel({ role }: { role: string | null }) {
                 <TableCell>{key.permissions.join(', ')}</TableCell>
                 <TableCell>{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : 'Never'}</TableCell>
                 <TableCell className="text-right">
-                  {confirmingId === key.id ? (
+                  {!canRevokeAny && key.userId !== meId ? null : confirmingId === key.id ? (
                     <span className="inline-flex gap-2">
                       <Button
                         variant="destructive"
