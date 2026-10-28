@@ -5,11 +5,14 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { prisma } from '@rivocloud/db';
+import type { Redis } from 'ioredis';
+import { SECURITY_OPTIONS } from '@rivocloud/security';
 import { AppModule } from '../app.module.js';
+import { REDIS } from '../redis/redis.module.js';
 import { IdentityClient } from '../auth/identity-client.js';
 
 class FakeIdentityClient {
-  nextAuth: { type: 'jwt' | 'api_key'; userId: string; orgId: string; role: string | null; permissions?: string[] } | null = null;
+  nextAuth: { type: 'jwt' | 'api_key'; userId: string; orgId: string; role: string | null; apiKeyId?: string; permissions?: string[] } | null = null;
   async verifyToken() {
     if (!this.nextAuth) throw new Error('no auth configured');
     return this.nextAuth;
@@ -20,7 +23,17 @@ class FakeIdentityClient {
   }
 }
 
+async function clearRateLimitKeys(redis: Redis): Promise<void> {
+  let cursor = '0';
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', 'ratelimit:*', 'COUNT', 500);
+    if (keys.length > 0) await redis.del(...keys);
+    cursor = next;
+  } while (cursor !== '0');
+}
+
 describe('AnalyticsController', () => {
+  let redis: Redis;
   let app: INestApplication;
   let ch: ClickHouseClient;
   let fakeIdentity: FakeIdentityClient;
@@ -31,20 +44,25 @@ describe('AnalyticsController', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(IdentityClient)
       .useClass(FakeIdentityClient)
+      .overrideProvider(SECURITY_OPTIONS)
+      .useValue({ rateLimitEnabled: true })
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     fakeIdentity = app.get(IdentityClient) as unknown as FakeIdentityClient;
+    redis = moduleRef.get<Redis>(REDIS);
     ch = createClient({ url: process.env.CLICKHOUSE_URL ?? 'http://localhost:8123' });
   });
 
   afterAll(async () => {
+    await clearRateLimitKeys(redis);
     await ch.close();
     await app.close();
   });
 
   beforeEach(async () => {
+    await clearRateLimitKeys(redis);
     const owner = await prisma.user.create({ data: { email: `${randomUUID()}@example.com`, name: 'Analytics Test Owner' } });
     const org = await prisma.organization.create({
       data: { name: 'Analytics Test Org', slug: `analytics-test-org-${randomUUID()}`, ownerId: owner.id },
@@ -196,5 +214,33 @@ describe('AnalyticsController', () => {
     });
     const response = await authed(`/api/v1/analytics/overview?zoneId=${otherZone.id}&${rangeQs}`);
     expect(response.status).toBe(404);
+  });
+
+  it('api key with only zone:read is denied', async () => {
+    fakeIdentity.nextAuth = { type: 'api_key', userId: 'u1', orgId, role: null, apiKeyId: 'k1', permissions: ['zone:read'] };
+    const response = await authed(`/api/v1/analytics/overview?${rangeQs}`);
+    expect(response.status).toBe(403);
+  });
+
+  it('api key with analytics:read is allowed', async () => {
+    fakeIdentity.nextAuth = { type: 'api_key', userId: 'u1', orgId, role: null, apiKeyId: 'k1', permissions: ['analytics:read'] };
+    const response = await authed(`/api/v1/analytics/overview?${rangeQs}`);
+    expect(response.status).toBe(200);
+  });
+
+  it('viewer JWT is allowed', async () => {
+    fakeIdentity.nextAuth = { type: 'jwt', userId: 'u1', orgId, role: 'viewer' };
+    const response = await authed(`/api/v1/analytics/overview?${rangeQs}`);
+    expect(response.status).toBe(200);
+  });
+
+  it('the 61st request in a minute gets 429', async () => {
+    const now = Date.now();
+    const members: (string | number)[] = [];
+    for (let i = 0; i < 60; i++) members.push(now, `seed-${i}`);
+    await redis.zadd('ratelimit:analytics:user:u1', ...members);
+    const response = await authed(`/api/v1/analytics/overview?${rangeQs}`);
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBeDefined();
   });
 });

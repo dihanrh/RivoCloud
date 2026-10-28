@@ -25,11 +25,11 @@ describe('IdentityClient', () => {
   it('verifyApiKey returns an api_key auth context on success', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ userId: 'u1', orgId: 'o1', permissions: ['zone:read'] }), { status: 200 })),
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ userId: 'u1', orgId: 'o1', apiKeyId: 'k1', permissions: ['zone:read'] }), { status: 200 })),
     );
     const client = new IdentityClient('http://identity', 'secret');
     const auth = await client.verifyApiKey('rc_key');
-    expect(auth).toEqual({ type: 'api_key', userId: 'u1', orgId: 'o1', role: null, permissions: ['zone:read'] });
+    expect(auth).toEqual({ type: 'api_key', userId: 'u1', orgId: 'o1', role: null, apiKeyId: 'k1', permissions: ['zone:read'] });
   });
 
   it('throws UnauthorizedException when the Identity Service is unreachable', async () => {
