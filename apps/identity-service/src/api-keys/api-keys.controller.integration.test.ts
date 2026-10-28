@@ -123,6 +123,14 @@ describe('API Keys', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ permissions: ['cache:invalidate'] });
     expect(withinRole.status).toBe(200);
+    expect(withinRole.body).not.toHaveProperty('keyHash');
+
+    const list = await request(app.getHttpServer())
+      .get('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${adminToken}`);
+    const listed = list.body.find((key: { id: string }) => key.id === devKey);
+    expect(Object.keys(withinRole.body).sort()).toEqual(Object.keys(listed).sort());
+    expect(withinRole.body.permissions).toEqual(['cache:invalidate']);
   });
 
   it("developer cannot revoke another member's key, admin can, developer can revoke own key", async () => {

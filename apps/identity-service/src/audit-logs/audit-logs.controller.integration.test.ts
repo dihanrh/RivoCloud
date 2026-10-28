@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
-import { createOrg, joinOrg, orgWithDeveloper, registerAndLogin, TEST_PASSWORD } from '../test-support/org-fixtures.js';
+import { createOrg, joinOrg, orgWithDeveloper, TEST_PASSWORD } from '../test-support/org-fixtures.js';
 
 describe('Audit logs', () => {
   let app: INestApplication;
@@ -50,11 +50,12 @@ describe('Audit logs', () => {
   });
 
   it('password change audit row has no password fields', async () => {
-    const token = await registerAndLogin(app, 'auditpw@example.com', 'Audit Pw');
+    // An org-scoped token: the account event must still not attach to that org.
+    const { orgId, ownerToken } = await createOrg(app, 'auditpw@example.com', 'Audit Pw', 'Audit Pw Org');
     const newPassword = 'correct-horse-battery';
     const change = await request(app.getHttpServer())
       .patch('/api/v1/users/me/password')
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
       .send({ currentPassword: TEST_PASSWORD, newPassword });
     expect(change.status).toBe(200);
 
@@ -62,10 +63,28 @@ describe('Audit logs', () => {
     const row = await prisma.auditLog.findFirstOrThrow({ where: { action: 'user.password_changed' } });
     expect(row.userId).toBe(user.id);
     expect(row.resourceType).toBe('user');
+    expect(row.orgId).toBeNull();
     const metadata = JSON.stringify(row.metadata);
     for (const forbidden of ['currentPassword', 'newPassword', TEST_PASSWORD, newPassword]) {
       expect(metadata).not.toContain(forbidden);
     }
+
+    const logs = await readLogs(orgId, ownerToken);
+    expect(logs.status).toBe(200);
+    expect(logs.body.items.map((item: { action: string }) => item.action)).not.toContain('user.password_changed');
+  });
+
+  it('profile updates are detached from the org and record the user id', async () => {
+    const { ownerToken } = await createOrg(app, 'auditme@example.com', 'Audit Me', 'Audit Me Org');
+    const update = await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'Audit Me Renamed' });
+    expect(update.status).toBe(200);
+
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: 'user.updated' } });
+    expect(row).toMatchObject({ orgId: null, resourceType: 'user', resourceId: update.body.id });
+    expect((row.metadata as { body: unknown }).body).toEqual({ name: 'Audit Me Renamed' });
   });
 
   it('owner and admin can read; developer gets 403', async () => {

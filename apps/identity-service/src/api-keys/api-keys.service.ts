@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@rivocloud/db';
+import type { ApiKey, PrismaClient } from '@rivocloud/db';
 import { scopesAllowedForRole, type ApiKeyScope, type OrgRole } from '@rivocloud/security';
 import { PRISMA } from '../prisma/prisma.module.js';
 import { APP_ENV } from '../app-env.token.js';
@@ -23,6 +23,18 @@ export interface ApiKeyCaller {
 }
 
 const KEY_MANAGER_ROLES: readonly OrgRole[] = ['owner', 'admin'];
+
+/** The public view of a key. Never includes `keyHash`, the verifier for the secret. */
+function toApiKeyView(key: ApiKey) {
+  return {
+    id: key.id,
+    name: key.name,
+    keyPrefix: key.keyPrefix,
+    permissions: key.permissions,
+    lastUsedAt: key.lastUsedAt,
+    expiresAt: key.expiresAt,
+  };
+}
 
 @Injectable()
 export class ApiKeysService {
@@ -93,14 +105,7 @@ export class ApiKeysService {
 
   async list(orgId: string) {
     const keys = await this.db.apiKey.findMany({ where: { orgId, revokedAt: null } });
-    return keys.map((key) => ({
-      id: key.id,
-      name: key.name,
-      keyPrefix: key.keyPrefix,
-      permissions: key.permissions,
-      lastUsedAt: key.lastUsedAt,
-      expiresAt: key.expiresAt,
-    }));
+    return keys.map(toApiKeyView);
   }
 
   async update(
@@ -113,7 +118,7 @@ export class ApiKeysService {
     if (data.permissions) {
       await this.assertScopesAllowedForKeyCreator(orgId, key.userId, data.permissions);
     }
-    return this.db.apiKey.update({ where: { id: keyId }, data });
+    return toApiKeyView(await this.db.apiKey.update({ where: { id: keyId }, data }));
   }
 
   async revoke(orgId: string, caller: ApiKeyCaller, keyId: string) {

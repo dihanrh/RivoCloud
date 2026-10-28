@@ -24,14 +24,15 @@ export class UsersController {
   }
 
   @Patch()
-  @Audit('user.updated', { resourceType: 'user', bodyFields: ['name', 'avatarUrl'] })
+  // Account events are not org events: detachOrg keeps them out of whichever org is selected.
+  @Audit('user.updated', { resourceType: 'user', idPath: 'id', detachOrg: true, bodyFields: ['name', 'avatarUrl'] })
   async updateMe(@AuthCtx() auth: AuthContext, @Body() dto: UpdateMeDto) {
     const user = await this.users.updateMe(auth.userId, dto);
     return { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl };
   }
 
   @Patch('password')
-  @Audit('user.password_changed', { resourceType: 'user' })
+  @Audit('user.password_changed', { resourceType: 'user', detachOrg: true })
   @HttpCode(200)
   async changePassword(@AuthCtx() auth: AuthContext, @Body() dto: ChangePasswordDto) {
     await this.users.changePassword(auth.userId, dto.currentPassword, dto.newPassword);
@@ -39,7 +40,7 @@ export class UsersController {
   }
 
   @Delete()
-  @Audit('user.deleted', { resourceType: 'user' })
+  @Audit('user.deleted', { resourceType: 'user', detachOrg: true })
   async deleteMe(@AuthCtx() auth: AuthContext) {
     await this.users.deleteMe(auth.userId);
     return { success: true };
