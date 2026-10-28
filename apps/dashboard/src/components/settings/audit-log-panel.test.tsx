@@ -49,6 +49,7 @@ describe('AuditLogPanel', () => {
           items: [
             entry(),
             entry({ id: 'log-2', action: 'zone.deleted', user: null, apiKey: { id: 'k1', name: 'ci', keyPrefix: 'rivo_abcd' } }),
+            entry({ id: 'log-4', action: 'zone.updated', apiKey: { id: 'k2', name: 'deploy', keyPrefix: 'rc_live' } }),
             entry({ id: 'log-3', action: 'cron.cleanup', user: null, resourceType: null, resourceId: null, ipAddress: null }),
           ],
           nextCursor: null,
@@ -60,10 +61,12 @@ describe('AuditLogPanel', () => {
 
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(screen.getByText('zone.created')).toBeInTheDocument();
-    expect(screen.getAllByText('zone zone-9')).toHaveLength(2);
-    expect(screen.getByText('API key rivo_abcd')).toBeInTheDocument();
+    expect(screen.getAllByText('zone zone-9')).toHaveLength(3);
+    expect(screen.getByText('API key rivo_abcd…')).toBeInTheDocument();
+    // API-key actions also carry the key's creator as `user`; the key is the actor.
+    expect(screen.getByText('API key rc_live… (by owner@example.com)')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();
-    expect(screen.getAllByText('203.0.113.9')).toHaveLength(2);
+    expect(screen.getAllByText('203.0.113.9')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
 

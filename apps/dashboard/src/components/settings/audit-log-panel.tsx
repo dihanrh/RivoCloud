@@ -7,8 +7,12 @@ import { useAuditLogs } from '@/hooks/use-audit-logs';
 import type { AuditLogEntry } from '@/lib/types';
 
 function actorLabel(entry: AuditLogEntry): string {
+  // API-key actions also record the key's creator as `user`, so the key wins.
+  if (entry.apiKey) {
+    const key = `API key ${entry.apiKey.keyPrefix}…`;
+    return entry.user ? `${key} (by ${entry.user.email})` : key;
+  }
   if (entry.user) return entry.user.email;
-  if (entry.apiKey) return `API key ${entry.apiKey.keyPrefix}`;
   return 'System';
 }
 

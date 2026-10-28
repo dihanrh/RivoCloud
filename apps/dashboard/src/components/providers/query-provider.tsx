@@ -19,11 +19,20 @@ function handleQueryError(error: unknown) {
   }
 }
 
+/**
+ * Retry once, but never on a 4xx: retrying a 429 doubles the load that triggered it,
+ * and other client errors will not succeed on a second attempt.
+ */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+  return failureCount < 1;
+}
+
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { retry: 1 } },
+        defaultOptions: { queries: { retry: shouldRetryQuery } },
         queryCache: new QueryCache({ onError: handleQueryError }),
       }),
   );
