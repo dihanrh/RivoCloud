@@ -62,9 +62,9 @@ describe('AuditLogPanel', () => {
     expect(await screen.findByText('owner@example.com')).toBeInTheDocument();
     expect(screen.getByText('zone.created')).toBeInTheDocument();
     expect(screen.getAllByText('zone zone-9')).toHaveLength(3);
-    expect(screen.getByText('API key rivo_abcd…')).toBeInTheDocument();
+    expect(screen.getByText('API key rivo_abcdâ€¦')).toBeInTheDocument();
     // API-key actions also carry the key's creator as `user`; the key is the actor.
-    expect(screen.getByText('API key rc_live… (by owner@example.com)')).toBeInTheDocument();
+    expect(screen.getByText('API key rc_liveâ€¦ (by owner@example.com)')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();
     expect(screen.getAllByText('203.0.113.9')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
