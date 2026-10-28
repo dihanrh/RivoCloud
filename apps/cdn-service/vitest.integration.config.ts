@@ -7,5 +7,7 @@ export default defineConfig({
     include: ['src/**/*.integration.test.ts'],
     testTimeout: 20000,
     fileParallelism: false,
+    // Suites run unthrottled; invalidations.controller.integration.test.ts re-enables limiting via SECURITY_OPTIONS.
+    env: { RATE_LIMIT_ENABLED: 'false' },
   },
 });

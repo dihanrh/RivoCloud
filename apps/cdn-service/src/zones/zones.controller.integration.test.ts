@@ -42,6 +42,7 @@ describe('ZonesController', () => {
   });
 
   beforeEach(async () => {
+    await prisma.auditLog.deleteMany();
     await prisma.pullZone.deleteMany();
     await prisma.organizationMember.deleteMany();
     await prisma.organization.deleteMany();
@@ -72,13 +73,25 @@ describe('ZonesController', () => {
     expect(response.body).not.toHaveProperty('signingSecret');
   });
 
-  it('rejects a viewer trying to create a zone', async () => {
+  it('viewer JWT cannot create a zone', async () => {
     await seedOrgAndAuth('viewer');
     const response = await request(app.getHttpServer())
       .post('/api/v1/zones')
       .set('Authorization', 'Bearer whatever')
       .send({ name: 'My Blog', originUrl: 'https://api.example.com' });
     expect(response.status).toBe(403);
+  });
+
+  it('creating a zone writes zone.created', async () => {
+    const org = await seedOrgAndAuth('owner');
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/zones')
+      .set('Authorization', 'Bearer whatever')
+      .send({ name: 'My Blog', originUrl: 'https://api.example.com' });
+    expect(response.status).toBe(201);
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: 'zone.created' } });
+    expect(row.resourceId).toBe(response.body.id);
+    expect(row.orgId).toBe(org.id);
   });
 
   it('rejects an invalid originUrl', async () => {

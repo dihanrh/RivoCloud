@@ -4,8 +4,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
+import type { Redis } from 'ioredis';
+import { SECURITY_OPTIONS } from '@rivocloud/security';
 import { AppModule } from '../app.module.js';
 import { IdentityClient } from '../auth/identity-client.js';
+import { REDIS } from '../redis/redis.module.js';
 import type { CombinedAuthContext } from '../auth/auth-context.decorator.js';
 
 class FakeIdentityClient {
@@ -20,7 +23,18 @@ class FakeIdentityClient {
   }
 }
 
+/** Deletes only rate-limit keys (never FLUSHALL). */
+async function clearRateLimitKeys(redis: Redis): Promise<void> {
+  let cursor = '0';
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', 'ratelimit:*', 'COUNT', 500);
+    if (keys.length > 0) await redis.del(...keys);
+    cursor = next;
+  } while (cursor !== '0');
+}
+
 describe('InvalidationsController', () => {
+  let redis: Redis;
   let app: INestApplication;
   let fakeIdentity: FakeIdentityClient;
 
@@ -29,17 +43,22 @@ describe('InvalidationsController', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(IdentityClient)
       .useValue(fakeIdentity)
+      .overrideProvider(SECURITY_OPTIONS)
+      .useValue({ rateLimitEnabled: true })
       .compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    redis = moduleRef.get<Redis>(REDIS);
   });
 
   afterAll(async () => {
+    await clearRateLimitKeys(redis);
     await app.close();
   });
 
   beforeEach(async () => {
+    await clearRateLimitKeys(redis);
     await prisma.cacheInvalidation.deleteMany();
     await prisma.pullZone.deleteMany();
     await prisma.organizationMember.deleteMany();
@@ -117,5 +136,20 @@ describe('InvalidationsController', () => {
       .get(`/api/v1/zones/${zone.id}/cache/invalidations/${created.body.invalidationId}`)
       .set('Authorization', 'Bearer whatever');
     expect(one.status).toBe(200);
+  });
+
+  it('the 101st invalidation for one zone in a minute gets 429', async () => {
+    const zone = await seedZoneAndAuth('owner');
+    const now = Date.now();
+    const members: (string | number)[] = [];
+    for (let i = 0; i < 100; i++) members.push(now, `seed-${i}`);
+    await redis.zadd(`ratelimit:cache-invalidation:zone:${zone.id}`, ...members);
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/zones/${zone.id}/cache/invalidate`)
+      .set('Authorization', 'Bearer whatever')
+      .send({ patterns: ['/logo.png'] });
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBeDefined();
   });
 });

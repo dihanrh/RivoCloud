@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { NoAudit } from '@rivocloud/security';
 import { InternalAuthGuard } from './internal-auth.guard.js';
 import { SignedUrlsService } from './signed-urls.service.js';
 import { SignUrlInternalDto } from './dto/sign-url-internal.dto.js';
@@ -9,6 +10,7 @@ import { SignUrlInternalDto } from './dto/sign-url-internal.dto.js';
 // decrypted secret inside the CDN Service.
 @Controller('internal/zones')
 @UseGuards(InternalAuthGuard)
+@NoAudit()
 export class SignedUrlsInternalController {
   constructor(private readonly signedUrls: SignedUrlsService) {}
 
