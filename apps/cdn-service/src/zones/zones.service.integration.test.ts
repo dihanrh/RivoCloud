@@ -7,10 +7,12 @@ import { EventsService } from '../events/events.service.js';
 import { ZonesService } from './zones.service.js';
 import { ZoneConfigPublisher } from './zone-config.publisher.js';
 import type { AppEnv } from '../env.js';
+import { decryptSecret } from '../signing/secret-box.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
 const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
-const publisher = new ZoneConfigPublisher(redis, { CDN_ROOT_DOMAIN: 'cdn.rivocloud.dev' } as AppEnv, events);
+const env = { CDN_ROOT_DOMAIN: 'cdn.rivocloud.dev', ZONE_SECRET_ENCRYPTION_KEY: 'c'.repeat(64) } as AppEnv;
+const publisher = new ZoneConfigPublisher(redis, env, events);
 
 async function seedOrg() {
   const user = await prisma.user.create({ data: { email: `${randomUUID()}@example.com`, name: 'Zone Owner' } });
@@ -18,7 +20,7 @@ async function seedOrg() {
 }
 
 describe('ZonesService', () => {
-  const service = new ZonesService(prisma, publisher);
+  const service = new ZonesService(prisma, publisher, env);
 
   beforeEach(async () => {
     await prisma.pullZone.deleteMany();
@@ -92,5 +94,81 @@ describe('ZonesService', () => {
     const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com' });
     await service.remove(org.id, zone.id);
     await expect(service.getForOrg(org.id, zone.id)).rejects.toThrow(NotFoundException);
+  });
+
+  describe('signed URLs', () => {
+    async function publishedConfig(zoneId: string) {
+      return JSON.parse((await redis.get(`zone_config:${zoneId}`)) ?? '{}');
+    }
+
+    it('creates a zone with signed URLs off and no secret by default', async () => {
+      const org = await seedOrg();
+      const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com' });
+      expect(zone.signedUrlsRequired).toBe(false);
+      expect(zone.hasSigningSecret).toBe(false);
+      const config = await publishedConfig(zone.id);
+      expect(config.signedUrlsRequired).toBe(false);
+      expect(config).not.toHaveProperty('signingSecret');
+    });
+
+    it('generates an encrypted secret when signed URLs are enabled, and publishes it decrypted', async () => {
+      const org = await seedOrg();
+      const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com' });
+      const updated = await service.update(org.id, zone.id, { signedUrlsRequired: true });
+
+      expect(updated.signedUrlsRequired).toBe(true);
+      expect(updated.hasSigningSecret).toBe(true);
+      expect(updated).not.toHaveProperty('signingSecret');
+
+      const row = await prisma.pullZone.findUniqueOrThrow({ where: { id: zone.id } });
+      const plain = decryptSecret(row.signingSecret!, env.ZONE_SECRET_ENCRYPTION_KEY);
+      expect(plain).toMatch(/^[0-9a-f]{64}$/);
+      expect(row.signingSecret).not.toContain(plain);
+
+      const config = await publishedConfig(zone.id);
+      expect(config.signedUrlsRequired).toBe(true);
+      expect(config.signingSecret).toBe(plain);
+    });
+
+    it('accepts signedUrlsRequired on create', async () => {
+      const org = await seedOrg();
+      const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com', signedUrlsRequired: true });
+      expect(zone.signedUrlsRequired).toBe(true);
+      expect(zone.hasSigningSecret).toBe(true);
+      expect((await publishedConfig(zone.id)).signingSecret).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('keeps the secret when disabled, stops publishing it, and reuses it when re-enabled', async () => {
+      const org = await seedOrg();
+      const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com', signedUrlsRequired: true });
+      const original = (await publishedConfig(zone.id)).signingSecret;
+
+      const disabled = await service.update(org.id, zone.id, { signedUrlsRequired: false });
+      expect(disabled.hasSigningSecret).toBe(true);
+      expect(await publishedConfig(zone.id)).not.toHaveProperty('signingSecret');
+
+      await service.update(org.id, zone.id, { signedUrlsRequired: true });
+      expect((await publishedConfig(zone.id)).signingSecret).toBe(original);
+    });
+
+    it('rotates the secret, republishes it, and nudges edges', async () => {
+      const org = await seedOrg();
+      const zone = await service.create(org.id, { name: 'A1', originUrl: 'https://a1.example.com', signedUrlsRequired: true });
+      const original = (await publishedConfig(zone.id)).signingSecret;
+
+      const rotated = await service.rotateSigningSecret(org.id, zone.id);
+      expect(rotated).not.toHaveProperty('signingSecret');
+      const next = (await publishedConfig(zone.id)).signingSecret;
+      expect(next).toMatch(/^[0-9a-f]{64}$/);
+      expect(next).not.toBe(original);
+      expect(events.getLastPublished('config.zones.updated')).toEqual({ zoneId: zone.id });
+    });
+
+    it('rejects rotating a zone belonging to a different org', async () => {
+      const orgA = await seedOrg();
+      const orgB = await seedOrg();
+      const zone = await service.create(orgA.id, { name: 'A1', originUrl: 'https://a1.example.com' });
+      await expect(service.rotateSigningSecret(orgB.id, zone.id)).rejects.toThrow(NotFoundException);
+    });
   });
 });

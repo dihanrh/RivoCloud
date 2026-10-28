@@ -1,6 +1,9 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient, PullZone } from '@rivocloud/db';
 import { PRISMA } from '../prisma/prisma.module.js';
+import { APP_ENV } from '../app-env.token.js';
+import type { AppEnv } from '../env.js';
+import { encryptSecret, generateSigningSecret } from '../signing/secret-box.js';
 import { slugify } from './slug.util.js';
 import { toZoneResponse } from './zone-response.util.js';
 import { ZoneConfigPublisher } from './zone-config.publisher.js';
@@ -12,6 +15,7 @@ export class ZonesService {
   constructor(
     @Inject(PRISMA) private readonly db: PrismaClient,
     private readonly publisher: ZoneConfigPublisher,
+    @Inject(APP_ENV) private readonly env: AppEnv,
   ) {}
 
   async create(orgId: string, dto: CreateZoneDto) {
@@ -25,6 +29,7 @@ export class ZonesService {
         originProtocol: dto.originProtocol ?? 'https',
         cacheTtl: dto.cacheTtl ?? 3600,
         browserTtl: dto.browserTtl ?? 0,
+        ...(dto.signedUrlsRequired && { signedUrlsRequired: true, signingSecret: this.newEncryptedSecret() }),
       },
     });
     await this.publisher.publish(zone);
@@ -44,7 +49,11 @@ export class ZonesService {
   }
 
   async update(orgId: string, zoneId: string, dto: UpdateZoneDto) {
-    await this.findOwned(orgId, zoneId);
+    const existing = await this.findOwned(orgId, zoneId);
+    // Turning signed URLs on for the first time needs a secret to sign with.
+    // Turning them off keeps it, so re-enabling revives links that haven't
+    // expired yet; rotateSigningSecret is the explicit way to kill them.
+    const needsSecret = dto.signedUrlsRequired === true && existing.signingSecret === null;
     const zone = await this.db.pullZone.update({
       where: { id: zoneId },
       data: {
@@ -54,8 +63,23 @@ export class ZonesService {
         ...(dto.cacheTtl !== undefined && { cacheTtl: dto.cacheTtl }),
         ...(dto.browserTtl !== undefined && { browserTtl: dto.browserTtl }),
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
+        ...(dto.signedUrlsRequired !== undefined && { signedUrlsRequired: dto.signedUrlsRequired }),
+        ...(needsSecret && { signingSecret: this.newEncryptedSecret() }),
       },
     });
+    await this.publisher.publish(zone);
+    return toZoneResponse(zone);
+  }
+
+  async rotateSigningSecret(orgId: string, zoneId: string) {
+    await this.findOwned(orgId, zoneId);
+    const zone = await this.db.pullZone.update({
+      where: { id: zoneId },
+      data: { signingSecret: this.newEncryptedSecret() },
+    });
+    // Republishing also emits config.zones.updated, so edges drop the old
+    // secret right away instead of honoring it for the rest of their 60s
+    // registry TTL (EDD Section 5.5: "edges flush cache").
     await this.publisher.publish(zone);
     return toZoneResponse(zone);
   }
@@ -72,6 +96,10 @@ export class ZonesService {
       throw new NotFoundException('Zone not found');
     }
     return zone;
+  }
+
+  private newEncryptedSecret(): string {
+    return encryptSecret(generateSigningSecret(), this.env.ZONE_SECRET_ENCRYPTION_KEY);
   }
 
   private async uniqueSlug(orgId: string, name: string): Promise<string> {

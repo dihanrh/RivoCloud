@@ -5,10 +5,11 @@ import { MinioWebhookController } from './minio-webhook.controller.js';
 import { MinioWebhookAuthGuard } from './minio-webhook-auth.guard.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { BucketsModule } from '../buckets/buckets.module.js';
+import { cdnClientProvider } from '../cdn/cdn-client.provider.js';
 
 @Module({
   imports: [AuthModule, BucketsModule],
   controllers: [ObjectsController, MinioWebhookController],
-  providers: [ObjectsService, MinioWebhookAuthGuard],
+  providers: [ObjectsService, MinioWebhookAuthGuard, cdnClientProvider],
 })
 export class ObjectsModule {}

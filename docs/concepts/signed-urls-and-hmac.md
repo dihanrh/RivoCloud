@@ -1,10 +1,11 @@
 # Signed URLs & HMAC — Explained for Beginners
 
-This document explains **the concepts behind Stage 10 (Signed URLs)** of RivoCloud's Phase 1 build — what problem signed URLs solve, what HMAC is and why it's the right tool for the job, and how a signed URL is generated and checked. **Stage 10 has not been built yet.** Nothing described here exists in the codebase today; this is preparation for building it, grounded entirely in the existing design documents:
+This document explains **Stage 10 (Signed URLs)** of RivoCloud's Phase 1 build: what problem signed URLs solve, what HMAC is and why it's the right tool for the job, and how a signed URL is generated and checked. Stage 10 is built. Sections 1–7 explain the concepts as the design documents describe them, and [Section 8](#8-what-was-actually-built) records where the implementation made its own choices. The sources are:
 
 - [`phase1-explained-for-beginners.md`](../phase1-explained-for-beginners.md) — see the "Signed URL" glossary entry in Section 3.1, and Stage 10 in the [16-stage build order](../phase1-explained-for-beginners.md#5-how-phase-1-is-built-the-16-stages). This document goes deeper than that glossary entry.
 - [`superpowers/specs/2026-07-25-revocloud-phase1-prd.md`](../superpowers/specs/2026-07-25-revocloud-phase1-prd.md) — Section 5.6 (the product requirement) and Section 7 (the authoritative stage roadmap).
 - [`superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md`](../superpowers/specs/2026-06-29-revocloud-phase1-cdn-edd.md) — Section 5.5 (the signature scheme in detail) and Section 11's "10. SIGNED URLS" block (the two build steps).
+- [`superpowers/plans/2026-09-26-phase1-stage10-signed-urls.md`](../superpowers/plans/2026-09-26-phase1-stage10-signed-urls.md) — the implementation plan, including the design decisions summarized in Section 8.
 
 If you haven't read [`phase1-explained-for-beginners.md`](../phase1-explained-for-beginners.md) yet, do that first — it explains the Control Plane / Data Plane split, the Storage Service, and the Edge Proxy, all of which this document assumes you already understand.
 
@@ -186,7 +187,27 @@ This is a known, pre-existing inconsistency in the source documents, not somethi
 
 ---
 
-## 8. Quick reference
+## 8. What was actually built
+
+The signature scheme is exactly the one above: `sig = hex(HMAC-SHA256(secret, "{expires}:{path}"))`, where `path` is the decoded URL path. The Node signer and the Go verifier share fixed test vectors, so a change on one side breaks both test suites. A few details the design documents leave open were settled like this:
+
+| Question | What the code does |
+|---|---|
+| Which requests need a signature? | A per-zone switch, `pull_zones.signed_urls_required` ("Require signed URLs" on the zone page). On such a zone the Edge Proxy checks **every** request, whatever the method, before it touches the cache or the origin. Other zones ignore `expires`/`sig` entirely. |
+| Where does the secret come from? | Turning the switch on generates a random 32-byte secret. It is stored AES-256-GCM-encrypted (key: `ZONE_SECRET_ENCRYPTION_KEY`), not bcrypt-hashed as the schema comment suggested, because HMAC needs the original secret back. It is never returned by any API; responses only say `hasSigningSecret`. |
+| How does the edge get the secret? | Inside the zone's existing `zone_config:{id}` Redis document, published only while the switch is on. The Edge Proxy already caches that document for 60 seconds and drops it on a `config.zones.updated` NATS nudge, which is the caching and rotation behaviour Section 4 describes. |
+| Who signs? | `POST /api/v1/buckets/:bucketId/objects/:key/sign` on the Storage Service checks the bucket and object (it must be fully uploaded), then asks the CDN Service to sign through `POST /internal/zones/:zoneId/signed-urls`. Only the CDN Service can decrypt the secret. The request names the `zoneId` because buckets and zones aren't linked in the data model, so the zone's origin must serve the bucket's objects at `/{key}`. |
+| Which host is in the URL? | The zone's active custom domain (always `https`) if it has one, otherwise its default `{slug}-{id}.cdn…` host. |
+| Expiry limits | Default 15 minutes, minimum 60 seconds, maximum 7 days. Signing is refused (`409`) for a zone that doesn't require signatures, since that link would only *look* protected. |
+| Rotation | `POST /api/v1/zones/:zoneId/signing-secret/rotate` ("Rotate signing secret" on the zone page). Every previously issued link stops working as soon as edges receive the nudge, typically within a second. Turning the switch off keeps the secret, so turning it back on revives links that haven't expired yet. |
+| Caching | After a signature checks out, the edge strips `expires`, `sig`, `download` and `filename` from the query. Every signed link for one object therefore shares one cache entry, and the origin never sees the signature. The response's `Cache-Control` is rewritten to `private` with `max-age` capped at the time left on the link, so browsers and proxies can't keep serving it after it expires. Failed checks return `403` with `Cache-Control: no-store`. |
+| Modifiers | `download=1` and `filename=` are supported (the filename is sanitized). They sit outside the signed message because they only change how an already-authorized response is presented. The `ip=` restriction is **not** implemented yet: it would have to be covered by the signature (changing the message format) and needs a trustworthy client-IP source, which Phase 1 doesn't have. |
+
+In the dashboard, the zone page has the "Require signed URLs" switch and the rotate button, and each uploaded file in Storage has a **Share link** action that picks a signing zone, an expiry, and optionally forced download, then shows the link with a copy button.
+
+---
+
+## 9. Quick reference
 
 | Concept | One-line meaning |
 |---|---|

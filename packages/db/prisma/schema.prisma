@@ -150,19 +150,20 @@ model Project {
 }
 
 model PullZone {
-  id             String   @id @default(uuid()) @db.Uuid
-  orgId          String   @map("org_id") @db.Uuid
-  projectId      String?  @map("project_id") @db.Uuid
-  name           String
-  slug           String
-  originUrl      String   @map("origin_url")
-  originProtocol String   @default("https") @map("origin_protocol")
-  cacheTtl       Int      @default(3600) @map("cache_ttl")
-  browserTtl     Int      @default(0) @map("browser_ttl")
-  enabled        Boolean  @default(true)
-  signingSecret  String?  @map("signing_secret")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                 String   @id @default(uuid()) @db.Uuid
+  orgId              String   @map("org_id") @db.Uuid
+  projectId          String?  @map("project_id") @db.Uuid
+  name               String
+  slug               String
+  originUrl          String   @map("origin_url")
+  originProtocol     String   @default("https") @map("origin_protocol")
+  cacheTtl           Int      @default(3600) @map("cache_ttl")
+  browserTtl         Int      @default(0) @map("browser_ttl")
+  enabled            Boolean  @default(true)
+  signingSecret      String?  @map("signing_secret")
+  signedUrlsRequired Boolean  @default(false) @map("signed_urls_required")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   project            Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)

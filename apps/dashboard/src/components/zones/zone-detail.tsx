@@ -12,6 +12,7 @@ import { useDeleteZone } from '@/hooks/use-delete-zone';
 import { errorMessage } from '@/lib/http';
 import type { Zone } from '@/lib/types';
 import { ZoneDomains } from './zone-domains';
+import { ZoneSignedUrls } from './zone-signed-urls';
 
 export function ZoneDetail({ zone }: { zone: Zone }) {
   const router = useRouter();
@@ -72,6 +73,7 @@ export function ZoneDetail({ zone }: { zone: Zone }) {
           </Button>
         </CardFooter>
       </Card>
+      <ZoneSignedUrls zone={zone} />
       <ZoneDomains zoneId={zone.id} />
     </div>
   );

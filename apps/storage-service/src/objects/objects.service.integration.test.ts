@@ -1,12 +1,13 @@
 import { describe, expect, it, beforeEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { prisma } from '@rivocloud/db';
 import { Client as MinioClient } from 'minio';
 import { BucketsService } from '../buckets/buckets.service.js';
 import { physicalBucketName } from '../buckets/bucket-name.util.js';
 import { ObjectsService } from './objects.service.js';
 import { EventsService } from '../events/events.service.js';
+import type { CdnClient, SignUrlRequest } from '../cdn/cdn-client.js';
 
 const minio = new MinioClient({
   endPoint: '127.0.0.1',
@@ -36,10 +37,21 @@ function minioNotificationRecord(bucketPhysicalName: string, minioObjectKey: str
   };
 }
 
+// Stands in for the CDN Service's internal signing endpoint, which has its
+// own integration tests in apps/cdn-service.
+class FakeCdnClient {
+  calls: Array<{ zoneId: string; body: SignUrlRequest }> = [];
+  async signUrl(zoneId: string, body: SignUrlRequest) {
+    this.calls.push({ zoneId, body });
+    return { url: `https://zone.cdn.test${body.path}?expires=${body.expires}&sig=fakesig` };
+  }
+}
+
 describe('ObjectsService', () => {
   const buckets = new BucketsService(prisma, minio);
   const events = new EventsService(process.env.NATS_URL ?? 'nats://localhost:4222');
-  const service = new ObjectsService(prisma, minio, buckets, events);
+  const cdn = new FakeCdnClient();
+  const service = new ObjectsService(prisma, minio, buckets, events, cdn as unknown as CdnClient);
 
   afterAll(async () => {
     await events.onModuleDestroy();
@@ -196,5 +208,61 @@ describe('ObjectsService', () => {
 
     const after = await prisma.storageObject.findUnique({ where: { id: objectId } });
     expect(after!.status).toBe('deleted');
+  });
+
+  describe('sign', () => {
+    const zoneId = randomUUID();
+
+    async function seedReadyObject(key: string) {
+      const { org, bucket } = await seedOrgAndBucket(buckets);
+      const { objectId } = await service.initiateUpload(org.id, bucket.id, { key });
+      await prisma.storageObject.update({ where: { id: objectId }, data: { status: 'ready', size: BigInt(5) } });
+      return { org, bucket };
+    }
+
+    beforeEach(() => {
+      cdn.calls = [];
+    });
+
+    it('asks the CDN Service to sign "/{key}" with a 15-minute default expiry', async () => {
+      const { org, bucket } = await seedReadyObject('reports/q3.pdf');
+      const before = Math.floor(Date.now() / 1000);
+      const result = await service.sign(org.id, bucket.id, 'reports/q3.pdf', { zoneId });
+
+      expect(cdn.calls).toHaveLength(1);
+      expect(cdn.calls[0]!.zoneId).toBe(zoneId);
+      expect(cdn.calls[0]!.body.orgId).toBe(org.id);
+      expect(cdn.calls[0]!.body.path).toBe('/reports/q3.pdf');
+      expect(cdn.calls[0]!.body.expires - before).toBeGreaterThanOrEqual(900);
+      expect(cdn.calls[0]!.body.expires - before).toBeLessThanOrEqual(901);
+      expect(result.url).toBe(`https://zone.cdn.test/reports/q3.pdf?expires=${cdn.calls[0]!.body.expires}&sig=fakesig`);
+      expect(result.expiresAt).toBe(new Date(cdn.calls[0]!.body.expires * 1000).toISOString());
+    });
+
+    it('honors expiresIn and appends the download modifiers outside the signature', async () => {
+      const { org, bucket } = await seedReadyObject('a.txt');
+      const result = await service.sign(org.id, bucket.id, 'a.txt', { zoneId, expiresIn: 3600, download: true, filename: 'my report.txt' });
+
+      const url = new URL(result.url);
+      expect(url.searchParams.get('sig')).toBe('fakesig');
+      expect(url.searchParams.get('download')).toBe('1');
+      expect(url.searchParams.get('filename')).toBe('my report.txt');
+      expect(cdn.calls[0]!.body.expires - Math.floor(Date.now() / 1000)).toBeGreaterThan(3590);
+    });
+
+    it('refuses to sign an upload that has not completed', async () => {
+      const { org, bucket } = await seedOrgAndBucket(buckets);
+      await service.initiateUpload(org.id, bucket.id, { key: 'pending.txt' });
+      await expect(service.sign(org.id, bucket.id, 'pending.txt', { zoneId })).rejects.toThrow(ConflictException);
+      expect(cdn.calls).toHaveLength(0);
+    });
+
+    it('404s for an unknown key or a bucket belonging to a different org', async () => {
+      const { org, bucket } = await seedReadyObject('a.txt');
+      const { org: otherOrg } = await seedOrgAndBucket(buckets, 'Other Bucket');
+      await expect(service.sign(org.id, bucket.id, 'missing.txt', { zoneId })).rejects.toThrow(NotFoundException);
+      await expect(service.sign(otherOrg.id, bucket.id, 'a.txt', { zoneId })).rejects.toThrow(NotFoundException);
+      expect(cdn.calls).toHaveLength(0);
+    });
   });
 });

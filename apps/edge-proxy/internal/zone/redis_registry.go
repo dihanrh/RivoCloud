@@ -24,6 +24,10 @@ type redisConfig struct {
 	CacheTTL       int    `json:"cacheTtl"`
 	BrowserTTL     int    `json:"browserTtl"`
 	Enabled        bool   `json:"enabled"`
+	// Only present while signedUrlsRequired is true — see the CDN Service's
+	// ZoneConfigPublisher.
+	SignedURLsRequired bool   `json:"signedUrlsRequired"`
+	SigningSecret      string `json:"signingSecret"`
 }
 
 // redisRule mirrors one element of the JSON array the CDN Service writes to
@@ -148,7 +152,14 @@ func (r *RedisRegistry) resolveConfig(zoneID string) (Config, bool) {
 		if jsonErr := json.Unmarshal([]byte(raw), &rc); jsonErr != nil {
 			log.Printf("zone: bad zone_config JSON for %q: %v", zoneID, jsonErr)
 		} else if rc.Enabled {
-			cfg = Config{ID: rc.ID, OrgID: rc.OrgID, OriginURL: rc.OriginURL, DefaultTTL: time.Duration(rc.CacheTTL) * time.Second}
+			cfg = Config{
+				ID:                 rc.ID,
+				OrgID:              rc.OrgID,
+				OriginURL:          rc.OriginURL,
+				DefaultTTL:         time.Duration(rc.CacheTTL) * time.Second,
+				SignedURLsRequired: rc.SignedURLsRequired,
+				SigningSecret:      rc.SigningSecret,
+			}
 			rules, rulesOK := r.resolveRules(ctx, zoneID)
 			cfg.Rules = rules
 			if !rulesOK {

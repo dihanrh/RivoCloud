@@ -25,6 +25,8 @@ const zone: Zone = {
   cacheTtl: 3600,
   browserTtl: 3600,
   enabled: true,
+  signedUrlsRequired: false,
+  hasSigningSecret: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

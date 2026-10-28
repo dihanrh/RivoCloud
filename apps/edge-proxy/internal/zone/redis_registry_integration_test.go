@@ -238,3 +238,19 @@ func TestRedisRegistry_ResolvesOrgID(t *testing.T) {
 		t.Fatalf("expected OrgID %q, got %q", "org-abc123", cfg.OrgID)
 	}
 }
+
+func TestRedisRegistry_ParsesSignedURLSettings(t *testing.T) {
+	client := newTestRedisClient(t)
+	seedZoneConfig(t, client, "private.cdn.rivocloud.dev", "zone-signed", redisConfig{
+		ID: "zone-signed", Slug: "private", OriginURL: "https://api.example.com", CacheTTL: 60, Enabled: true,
+		SignedURLsRequired: true, SigningSecret: "abc123",
+	})
+
+	cfg, ok := NewRedisRegistry(client).Resolve("private.cdn.rivocloud.dev")
+	if !ok {
+		t.Fatal("expected zone to resolve")
+	}
+	if !cfg.SignedURLsRequired || cfg.SigningSecret != "abc123" {
+		t.Fatalf("expected signed URL settings to be parsed, got %+v", cfg)
+	}
+}

@@ -10,7 +10,15 @@ const STATUS_VARIANT: Record<StorageObject['status'], 'default' | 'secondary' | 
   deleted: 'destructive',
 };
 
-export function ObjectBrowser({ objects, onDelete }: { objects: StorageObject[]; onDelete: (key: string) => void }) {
+export function ObjectBrowser({
+  objects,
+  onDelete,
+  onShare,
+}: {
+  objects: StorageObject[];
+  onDelete: (key: string) => void;
+  onShare?: (key: string) => void;
+}) {
   if (objects.length === 0) {
     return <p className="text-muted-foreground">No files yet. Upload one to get started.</p>;
   }
@@ -35,7 +43,12 @@ export function ObjectBrowser({ objects, onDelete }: { objects: StorageObject[];
             <TableCell>
               <Badge variant={STATUS_VARIANT[object.status]}>{object.status}</Badge>
             </TableCell>
-            <TableCell>
+            <TableCell className="flex justify-end gap-2">
+              {onShare && object.status === 'ready' && (
+                <Button variant="outline" size="sm" onClick={() => onShare(object.key)}>
+                  Share link
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => onDelete(object.key)}>
                 Delete
               </Button>

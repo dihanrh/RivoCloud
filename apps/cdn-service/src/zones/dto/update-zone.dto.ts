@@ -7,4 +7,5 @@ export class UpdateZoneDto {
   @IsOptional() @IsInt() @Min(0) cacheTtl?: number;
   @IsOptional() @IsInt() @Min(0) browserTtl?: number;
   @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsBoolean() signedUrlsRequired?: boolean;
 }

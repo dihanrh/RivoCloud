@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@rivocloud/db';
 import type { Client as MinioClient } from 'minio';
@@ -7,10 +7,12 @@ import { MINIO } from '../minio/minio.module.js';
 import { BucketsService } from '../buckets/buckets.service.js';
 import { physicalBucketName } from '../buckets/bucket-name.util.js';
 import { EventsService } from '../events/events.service.js';
+import { CdnClient } from '../cdn/cdn-client.js';
 import { bucketIdFromPhysicalName, decodeMinioObjectKey, splitKeyAndVersion } from './object-key.util.js';
 import { toObjectResponse } from './object-response.util.js';
 import type { InitiateUploadDto } from './dto/initiate-upload.dto.js';
 import type { ListObjectsDto } from './dto/list-objects.dto.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type SignObjectDto } from './dto/sign-object.dto.js';
 
 const PRESIGNED_UPLOAD_TTL_SECONDS = 15 * 60;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,6 +26,7 @@ export class ObjectsService {
     @Inject(MINIO) private readonly minio: MinioClient,
     private readonly buckets: BucketsService,
     private readonly events: EventsService,
+    private readonly cdn: CdnClient,
   ) {}
 
   async initiateUpload(orgId: string, bucketId: string, dto: InitiateUploadDto) {
@@ -88,6 +91,27 @@ export class ObjectsService {
       // — documented, accepted window (Design Decision 6).
       this.logger.warn(`failed to remove MinIO object for ${bucketId}/${key}: ${error}`);
     }
+  }
+
+  // EDD Section 11, step 10.1. The object is addressed at the edge as
+  // "/{key}": the zone's origin is expected to serve the bucket's objects
+  // at that path (plan Design Decision 1).
+  async sign(orgId: string, bucketId: string, key: string, dto: SignObjectDto) {
+    await this.buckets.getForOrg(orgId, bucketId);
+    const object = await this.findLatest(bucketId, key);
+    if (object.status !== 'ready') {
+      throw new ConflictException('Object upload has not completed yet');
+    }
+
+    const expires = Math.floor(Date.now() / 1000) + (dto.expiresIn ?? DEFAULT_SIGNED_URL_TTL_SECONDS);
+    const { url } = await this.cdn.signUrl(dto.zoneId, { orgId, path: `/${key}`, expires });
+
+    // download/filename only shape Content-Disposition on a response the
+    // signature already authorized, so they ride outside the signed message.
+    const signed = new URL(url);
+    if (dto.download) signed.searchParams.set('download', '1');
+    if (dto.filename) signed.searchParams.set('filename', dto.filename);
+    return { url: signed.toString(), expiresAt: new Date(expires * 1000).toISOString() };
   }
 
   private async findLatest(bucketId: string, key: string) {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ObjectBrowser } from './object-browser';
 import type { StorageObject } from '@/lib/types';
 
@@ -41,5 +42,20 @@ describe('ObjectBrowser', () => {
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
     expect(screen.getByText('draft.txt')).toBeInTheDocument();
     expect(screen.getByText('pending')).toBeInTheDocument();
+  });
+
+  it('offers a share link only for ready objects, and only when sharing is wired up', async () => {
+    const onShare = vi.fn();
+    const objects = [makeObject({ key: 'photo.png' }), makeObject({ id: 'obj-2', key: 'draft.txt', status: 'pending', size: null })];
+
+    const { unmount } = render(<ObjectBrowser objects={objects} onDelete={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /share link/i })).not.toBeInTheDocument();
+    unmount();
+
+    render(<ObjectBrowser objects={objects} onDelete={vi.fn()} onShare={onShare} />);
+    const shareButtons = screen.getAllByRole('button', { name: /share link/i });
+    expect(shareButtons).toHaveLength(1);
+    await userEvent.click(shareButtons[0]!);
+    expect(onShare).toHaveBeenCalledWith('photo.png');
   });
 });

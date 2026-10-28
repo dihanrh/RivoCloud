@@ -20,6 +20,7 @@ import (
 	"rivocloud/edge-proxy/internal/cachestore"
 	"rivocloud/edge-proxy/internal/compress"
 	"rivocloud/edge-proxy/internal/httpcache"
+	"rivocloud/edge-proxy/internal/signedurl"
 	"rivocloud/edge-proxy/internal/zone"
 )
 
@@ -67,6 +68,14 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	resolvedZone = z
 	zoneResolved = true
+
+	if z.SignedURLsRequired {
+		verified, ok := h.verifySignedURL(rec, r, z)
+		if !ok {
+			return
+		}
+		r = verified
+	}
 
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		h.proxyUncached(rec, r, z)
@@ -178,6 +187,67 @@ func (h *CachingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.store(r.Context(), key, newEntry)
 	}
 	writeEntry(rec, r, h.negotiateEncoding(r, key, newEntry), now, "MISS")
+}
+
+// verifySignedURL enforces a zone's signed-URL requirement before the request
+// touches the cache or the origin (EDD Section 5.5). On failure it writes the
+// 403 itself. On success it returns a copy of r with the signing parameters
+// stripped, so every signed URL for one object shares a single cache key and
+// the origin never sees the signature, and it slots a writer under rec that
+// applies the download headers and caps the downstream cache lifetime at
+// the signature's own expiry.
+func (h *CachingHandler) verifySignedURL(rec *statusRecorder, r *http.Request, z zone.Config) (*http.Request, bool) {
+	now := h.now()
+	query := r.URL.Query()
+	expiresAt, err := signedurl.Verify(query, r.URL.Path, z.SigningSecret, now)
+	if err != nil {
+		rec.Header().Set("Cache-Control", "no-store")
+		http.Error(rec, "invalid or expired signature", http.StatusForbidden)
+		return nil, false
+	}
+
+	disposition, hasDisposition := signedurl.ContentDisposition(query)
+	rec.ResponseWriter = &signedResponseWriter{
+		ResponseWriter: rec.ResponseWriter,
+		remaining:      expiresAt.Sub(now),
+		disposition:    disposition,
+		hasDisposition: hasDisposition,
+	}
+
+	stripped := r.Clone(r.Context())
+	stripped.URL.RawQuery = signedurl.Strip(r.URL.RawQuery)
+	return stripped, true
+}
+
+// signedResponseWriter rewrites headers at the last moment before they're
+// sent, which is the one point every response path (cache hit, miss, stale,
+// uncached passthrough, error) goes through.
+type signedResponseWriter struct {
+	http.ResponseWriter
+	remaining      time.Duration
+	disposition    string
+	hasDisposition bool
+	wroteHeader    bool
+}
+
+func (w *signedResponseWriter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	header := w.Header()
+	header.Set("Cache-Control", signedurl.CapCacheControl(header.Get("Cache-Control"), w.remaining))
+	if w.hasDisposition && code >= 200 && code < 300 {
+		header.Set("Content-Disposition", w.disposition)
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *signedResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 func (h *CachingHandler) proxyUncached(w http.ResponseWriter, r *http.Request, z zone.Config) {
