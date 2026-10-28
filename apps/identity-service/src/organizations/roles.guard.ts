@@ -1,10 +1,14 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { OrgRole } from './roles.js';
+import type { OrgRole } from '@rivocloud/security';
 
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: OrgRole[]) => SetMetadata(ROLES_KEY, roles);
 
+/**
+ * Checks `request.orgRole` (the live role set by OrgMemberGuard for the org in
+ * the URL), never the JWT's role claim.
+ */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -15,7 +19,7 @@ export class RolesGuard implements CanActivate {
       return true;
     }
     const request = context.switchToHttp().getRequest();
-    const role = request.auth?.role;
+    const role: OrgRole | undefined = request.orgRole;
     if (!role || !required.includes(role)) {
       throw new ForbiddenException(`Requires one of roles: ${required.join(', ')}`);
     }

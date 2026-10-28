@@ -102,4 +102,65 @@ describe('API Keys', () => {
       .set('Authorization', `Bearer ${accessToken}`);
     expect(list.body).toHaveLength(0);
   });
+
+  async function joinAs(orgId: string, ownerToken: string, email: string, role: 'admin' | 'developer' | 'viewer') {
+    const server = app.getHttpServer();
+    await request(server).post('/api/v1/auth/register').send({ email, password: 'hunter22222', name: email });
+    const invite = await request(server)
+      .post(`/api/v1/orgs/${orgId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email, role });
+    expect(invite.status).toBe(201);
+    const login = await request(server).post('/api/v1/auth/login').send({ email, password: 'hunter22222' });
+    const selected = await request(server)
+      .post('/api/v1/auth/select-org')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .send({ orgId });
+    return selected.body.accessToken as string;
+  }
+
+  async function createKey(token: string, name: string) {
+    const create = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name, permissions: ['zone:read'] });
+    expect(create.status).toBe(201);
+    return create.body.id as string;
+  }
+
+  it("developer cannot revoke another member's key, admin can, developer can revoke own key", async () => {
+    const owner = await registerLoginCreateOrg(app, 'revokeowner@example.com', 'Revoke Owner', 'Revoke Org');
+    const dev1Token = await joinAs(owner.orgId, owner.accessToken, 'revokedev1@example.com', 'developer');
+    const dev2Token = await joinAs(owner.orgId, owner.accessToken, 'revokedev2@example.com', 'developer');
+    const adminToken = await joinAs(owner.orgId, owner.accessToken, 'revokeadmin@example.com', 'admin');
+    const dev2KeyA = await createKey(dev2Token, 'dev2 key A');
+    const dev2KeyB = await createKey(dev2Token, 'dev2 key B');
+    const dev1Key = await createKey(dev1Token, 'dev1 key');
+
+    const denied = await request(app.getHttpServer())
+      .delete(`/api/v1/api-keys/${dev2KeyA}`)
+      .set('Authorization', `Bearer ${dev1Token}`);
+    expect(denied.status).toBe(403);
+
+    const deniedUpdate = await request(app.getHttpServer())
+      .patch(`/api/v1/api-keys/${dev2KeyA}`)
+      .set('Authorization', `Bearer ${dev1Token}`)
+      .send({ name: 'renamed by someone else' });
+    expect(deniedUpdate.status).toBe(403);
+
+    const byAdmin = await request(app.getHttpServer())
+      .delete(`/api/v1/api-keys/${dev2KeyA}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(byAdmin.status).toBe(200);
+
+    const byOwner = await request(app.getHttpServer())
+      .delete(`/api/v1/api-keys/${dev2KeyB}`)
+      .set('Authorization', `Bearer ${owner.accessToken}`);
+    expect(byOwner.status).toBe(200);
+
+    const own = await request(app.getHttpServer())
+      .delete(`/api/v1/api-keys/${dev1Key}`)
+      .set('Authorization', `Bearer ${dev1Token}`);
+    expect(own.status).toBe(200);
+  });
 });

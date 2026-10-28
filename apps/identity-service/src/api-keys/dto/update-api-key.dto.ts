@@ -1,5 +1,5 @@
 import { IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { API_KEY_SCOPES, type ApiKeyScope } from '../../organizations/roles.js';
+import { API_KEY_SCOPES, type ApiKeyScope } from '@rivocloud/security';
 
 export class UpdateApiKeyDto {
   @IsOptional()

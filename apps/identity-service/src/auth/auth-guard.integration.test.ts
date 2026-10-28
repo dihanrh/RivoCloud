@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
-import { Controller, Get, INestApplication, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, INestApplication, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
@@ -12,8 +12,8 @@ import { ApiKeysModule } from '../api-keys/api-keys.module.js';
 @UseGuards(AuthGuard)
 class WhoAmIController {
   @Get()
-  whoAmI() {
-    return { ok: true };
+  whoAmI(@Req() req: { auth: unknown }) {
+    return req.auth;
   }
 }
 
@@ -85,5 +85,84 @@ describe('AuthGuard: accepts both a JWT bearer token and an X-API-Key header', (
 
     const withRevokedKey = await request(app.getHttpServer()).get('/test/whoami').set('X-API-Key', key.body.rawKey);
     expect(withRevokedKey.status).toBe(401);
+  });
+
+  async function orgWithDeveloper(prefix: string) {
+    const server = app.getHttpServer();
+    await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222', name: 'Owner' });
+    const ownerLogin = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222' });
+    const org = await request(server)
+      .post('/api/v1/orgs')
+      .set('Authorization', `Bearer ${ownerLogin.body.accessToken}`)
+      .send({ name: `${prefix} Org` });
+    const orgId = org.body.organization.id as string;
+    const ownerToken = org.body.accessToken as string;
+    await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222', name: 'Dev' });
+    const invite = await request(server)
+      .post(`/api/v1/orgs/${orgId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email: `${prefix}dev@example.com`, role: 'developer' });
+    const devLogin = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222' });
+    const devSelect = await request(server)
+      .post('/api/v1/auth/select-org')
+      .set('Authorization', `Bearer ${devLogin.body.accessToken}`)
+      .send({ orgId });
+    return { orgId, ownerToken, devUserId: invite.body.userId as string, devToken: devSelect.body.accessToken as string };
+  }
+
+  it('reads the JWT caller role live and rejects a removed member', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('guardlive');
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const demoted = await request(app.getHttpServer()).get('/test/whoami').set('Authorization', `Bearer ${devToken}`);
+    expect(demoted.status).toBe(200);
+    expect(demoted.body).toEqual({ type: 'jwt', userId: devUserId, orgId, role: 'viewer' });
+
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const removed = await request(app.getHttpServer()).get('/test/whoami').set('Authorization', `Bearer ${devToken}`);
+    expect(removed.status).toBe(401);
+    expect(removed.body.message).toBe('No longer a member of this organization');
+  });
+
+  it("caps an API key's permissions at its creator's current role", async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('guardcap');
+    const key = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${devToken}`)
+      .send({ name: 'Capped key', permissions: ['zone:read', 'zone:write'] });
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const capped = await request(app.getHttpServer()).get('/test/whoami').set('X-API-Key', key.body.rawKey);
+    expect(capped.status).toBe(200);
+    expect(capped.body).toEqual({
+      type: 'api_key',
+      userId: devUserId,
+      orgId,
+      role: null,
+      apiKeyId: key.body.id,
+      permissions: ['zone:read'],
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const orphaned = await request(app.getHttpServer()).get('/test/whoami').set('X-API-Key', key.body.rawKey);
+    expect(orphaned.status).toBe(401);
   });
 });

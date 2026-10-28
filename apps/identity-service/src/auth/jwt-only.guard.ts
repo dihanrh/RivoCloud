@@ -1,9 +1,14 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { TokenService } from './token.service.js';
+import { MembershipService } from '../organizations/membership.service.js';
+import type { AuthContext } from './auth-context.decorator.js';
 
 @Injectable()
 export class JwtOnlyGuard implements CanActivate {
-  constructor(private readonly tokens: TokenService) {}
+  constructor(
+    private readonly tokens: TokenService,
+    private readonly membership: MembershipService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -21,7 +26,10 @@ export class JwtOnlyGuard implements CanActivate {
     if (await this.tokens.isAccessTokenBlacklisted(claims.jti)) {
       throw new UnauthorizedException('Token has been revoked');
     }
-    request.auth = { userId: claims.sub, orgId: claims.org, role: claims.role };
+    // The JWT's role claim may be stale (demotion/removal); read it live.
+    const role = await this.membership.roleForTokenClaims(claims.org, claims.sub);
+    const auth: AuthContext = { type: 'jwt', userId: claims.sub, orgId: claims.org, role };
+    request.auth = auth;
     return true;
   }
 }

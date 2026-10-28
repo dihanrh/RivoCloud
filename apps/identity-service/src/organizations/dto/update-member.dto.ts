@@ -1,7 +1,7 @@
 import { IsIn } from 'class-validator';
-import { ORG_ROLES, type OrgRole } from '../roles.js';
+import { ASSIGNABLE_ROLES, type AssignableRole } from './assignable-roles.js';
 
 export class UpdateMemberDto {
-  @IsIn(ORG_ROLES)
-  role!: OrgRole;
+  @IsIn(ASSIGNABLE_ROLES)
+  role!: AssignableRole;
 }

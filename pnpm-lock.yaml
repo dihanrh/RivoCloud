@@ -274,6 +274,9 @@ importers:
       '@rivocloud/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@rivocloud/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3

@@ -32,14 +32,14 @@ export class ApiKeysController {
   @Patch(':keyId')
   async update(@AuthCtx() auth: AuthContext, @Param('keyId') keyId: string, @Body() dto: UpdateApiKeyDto) {
     const orgId = this.requireOrg(auth);
-    return this.apiKeys.update(orgId, auth.userId, keyId, dto);
+    return this.apiKeys.update(orgId, { userId: auth.userId, role: auth.role }, keyId, dto);
   }
 
   @Delete(':keyId')
   @HttpCode(200)
   async revoke(@AuthCtx() auth: AuthContext, @Param('keyId') keyId: string) {
     const orgId = this.requireOrg(auth);
-    await this.apiKeys.revoke(orgId, keyId);
+    await this.apiKeys.revoke(orgId, { userId: auth.userId, role: auth.role }, keyId);
     return { success: true };
   }
 }

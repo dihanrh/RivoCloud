@@ -74,4 +74,108 @@ describe('Internal auth verification endpoints', () => {
     expect(verify.status).toBe(201);
     expect(verify.body.permissions).toEqual(['zone:read']);
   });
+
+  async function orgWithDeveloper(prefix: string) {
+    const server = app.getHttpServer();
+    await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222', name: 'Owner' });
+    const ownerLogin = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222' });
+    const org = await request(server)
+      .post('/api/v1/orgs')
+      .set('Authorization', `Bearer ${ownerLogin.body.accessToken}`)
+      .send({ name: `${prefix} Org` });
+    const orgId = org.body.organization.id as string;
+    const ownerToken = org.body.accessToken as string;
+
+    await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222', name: 'Dev' });
+    const invite = await request(server)
+      .post(`/api/v1/orgs/${orgId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email: `${prefix}dev@example.com`, role: 'developer' });
+    const devLogin = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222' });
+    const devSelect = await request(server)
+      .post('/api/v1/auth/select-org')
+      .set('Authorization', `Bearer ${devLogin.body.accessToken}`)
+      .send({ orgId });
+    return {
+      orgId,
+      ownerToken,
+      devUserId: invite.body.userId as string,
+      devToken: devSelect.body.accessToken as string,
+    };
+  }
+
+  it('verify-token returns the live role', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('liverole');
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-token')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ token: devToken });
+    expect(verify.status).toBe(201);
+    expect(verify.body).toEqual({ userId: devUserId, orgId, role: 'viewer' });
+  });
+
+  it('verify-token rejects a removed member', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('removed');
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-token')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ token: devToken });
+    expect(verify.status).toBe(401);
+    expect(verify.body.message).toBe('No longer a member of this organization');
+  });
+
+  it('verify-api-key returns apiKeyId and effective permissions', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('effective');
+    const key = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${devToken}`)
+      .send({ name: 'Dev key', permissions: ['zone:read', 'zone:write'] });
+    expect(key.status).toBe(201);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-api-key')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ apiKey: key.body.rawKey });
+    expect(verify.status).toBe(201);
+    expect(verify.body).toEqual({ orgId, userId: devUserId, apiKeyId: key.body.id, permissions: ['zone:read'] });
+  });
+
+  it('api key is invalid after its creator leaves the org', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('leaver');
+    const key = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${devToken}`)
+      .send({ name: 'Leaver key', permissions: ['zone:read'] });
+    expect(key.status).toBe(201);
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-api-key')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ apiKey: key.body.rawKey });
+    expect(verify.status).toBe(401);
+  });
 });

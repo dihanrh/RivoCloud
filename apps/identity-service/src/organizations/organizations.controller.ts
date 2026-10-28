@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import type { OrgRole } from '@rivocloud/security';
 import { JwtOnlyGuard } from '../auth/jwt-only.guard.js';
 import { AuthCtx, type AuthContext } from '../auth/auth-context.decorator.js';
 import { OrganizationsService } from './organizations.service.js';
+import { OrgMemberGuard } from './org-member.guard.js';
 import { RolesGuard, Roles } from './roles.guard.js';
 import { CreateOrgDto } from './dto/create-org.dto.js';
 import { UpdateOrgDto } from './dto/update-org.dto.js';
@@ -10,7 +12,7 @@ import { UpdateMemberDto } from './dto/update-member.dto.js';
 import { AuthService } from '../auth/auth.service.js';
 
 @Controller('api/v1/orgs')
-@UseGuards(JwtOnlyGuard, RolesGuard)
+@UseGuards(JwtOnlyGuard, OrgMemberGuard, RolesGuard)
 export class OrganizationsController {
   constructor(
     private readonly orgs: OrganizationsService,
@@ -30,8 +32,8 @@ export class OrganizationsController {
   }
 
   @Get(':orgId')
-  async get(@AuthCtx() authCtx: AuthContext, @Param('orgId') orgId: string) {
-    return this.orgs.getForMember(orgId, authCtx.userId);
+  async get(@Param('orgId') orgId: string) {
+    return this.orgs.get(orgId);
   }
 
   @Patch(':orgId')
@@ -54,12 +56,17 @@ export class OrganizationsController {
 
   @Post(':orgId/members')
   @Roles('owner', 'admin')
-  async addMember(@AuthCtx() authCtx: AuthContext, @Param('orgId') orgId: string, @Body() dto: AddMemberDto) {
-    return this.orgs.addMember(orgId, authCtx.userId, dto.email, dto.role);
+  async addMember(
+    @AuthCtx() authCtx: AuthContext,
+    @Req() req: { orgRole: OrgRole },
+    @Param('orgId') orgId: string,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.orgs.addMember(orgId, authCtx.userId, req.orgRole, dto.email, dto.role);
   }
 
   @Patch(':orgId/members/:userId')
-  @Roles('owner', 'admin')
+  @Roles('owner')
   async updateMember(
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
@@ -70,8 +77,8 @@ export class OrganizationsController {
 
   @Delete(':orgId/members/:userId')
   @Roles('owner', 'admin')
-  async removeMember(@Param('orgId') orgId: string, @Param('userId') userId: string) {
-    await this.orgs.removeMember(orgId, userId);
+  async removeMember(@Req() req: { orgRole: OrgRole }, @Param('orgId') orgId: string, @Param('userId') userId: string) {
+    await this.orgs.removeMember(orgId, req.orgRole, userId);
     return { success: true };
   }
 }

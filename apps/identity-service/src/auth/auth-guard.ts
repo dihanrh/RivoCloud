@@ -1,12 +1,15 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import type { OrgRole } from '@rivocloud/security';
 import { TokenService } from './token.service.js';
 import { ApiKeysService } from '../api-keys/api-keys.service.js';
+import { MembershipService } from '../organizations/membership.service.js';
 
 export interface CombinedAuthContext {
   type: 'jwt' | 'api_key';
   userId: string | null;
   orgId: string | null;
-  role: string | null;
+  /** Live role for JWT callers; null for API keys (their permissions are already role-capped). */
+  role: OrgRole | null;
   apiKeyId?: string;
   permissions?: string[];
 }
@@ -16,6 +19,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly tokens: TokenService,
     private readonly apiKeys: ApiKeysService,
+    private readonly membership: MembershipService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,7 +38,7 @@ export class AuthGuard implements CanActivate {
         orgId: key.orgId,
         role: null,
         apiKeyId: key.id,
-        permissions: key.permissions as string[],
+        permissions: key.permissions,
       };
       request.auth = auth;
       return true;
@@ -53,7 +57,8 @@ export class AuthGuard implements CanActivate {
     if (await this.tokens.isAccessTokenBlacklisted(claims.jti)) {
       throw new UnauthorizedException('Token has been revoked');
     }
-    const auth: CombinedAuthContext = { type: 'jwt', userId: claims.sub, orgId: claims.org, role: claims.role };
+    const role = await this.membership.roleForTokenClaims(claims.org, claims.sub);
+    const auth: CombinedAuthContext = { type: 'jwt', userId: claims.sub, orgId: claims.org, role };
     request.auth = auth;
     return true;
   }

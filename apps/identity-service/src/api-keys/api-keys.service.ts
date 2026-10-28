@@ -1,33 +1,60 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@rivocloud/db';
+import { scopesAllowedForRole, type ApiKeyScope, type OrgRole } from '@rivocloud/security';
 import { PRISMA } from '../prisma/prisma.module.js';
 import { APP_ENV } from '../app-env.token.js';
 import type { AppEnv } from '../env.js';
 import { hashPassword, comparePassword } from '../auth/password.util.js';
+import { MembershipService } from '../organizations/membership.service.js';
 import { generateApiKey } from './api-key.util.js';
-import { scopesAllowedForRole, isOrgRole, type ApiKeyScope } from '../organizations/roles.js';
+
+/** A verified API key, with permissions already capped at its creator's current role. */
+export interface VerifiedApiKey {
+  id: string;
+  orgId: string;
+  userId: string;
+  permissions: ApiKeyScope[];
+}
+
+/** The caller managing keys: their user id and live role in the key's org. */
+export interface ApiKeyCaller {
+  userId: string;
+  role: OrgRole | null;
+}
+
+const KEY_MANAGER_ROLES: readonly OrgRole[] = ['owner', 'admin'];
 
 @Injectable()
 export class ApiKeysService {
   constructor(
     @Inject(PRISMA) private readonly db: PrismaClient,
     @Inject(APP_ENV) private readonly env: AppEnv,
+    private readonly membership: MembershipService,
   ) {}
 
   private async assertScopesAllowedForCaller(orgId: string, userId: string, requested: ApiKeyScope[]) {
-    const membership = await this.db.organizationMember.findUnique({
-      where: { orgId_userId: { orgId, userId } },
-    });
-    if (!membership || !isOrgRole(membership.role)) {
+    const role = await this.membership.currentRole(orgId, userId);
+    if (!role) {
       throw new ForbiddenException('Not a member of this organization');
     }
-    const allowed = new Set(scopesAllowedForRole(membership.role));
+    const allowed = new Set(scopesAllowedForRole(role));
     const disallowed = requested.filter((scope) => !allowed.has(scope));
     if (disallowed.length > 0) {
-      throw new ForbiddenException(
-        `Your role (${membership.role}) cannot grant scopes: ${disallowed.join(', ')}`,
-      );
+      throw new ForbiddenException(`Your role (${role}) cannot grant scopes: ${disallowed.join(', ')}`);
     }
+  }
+
+  /** Owner/Admin may manage any key in the org; everyone else only keys they created. */
+  private async findManageableKey(orgId: string, caller: ApiKeyCaller, keyId: string) {
+    const key = await this.db.apiKey.findUnique({ where: { id: keyId } });
+    if (!key || key.orgId !== orgId || key.revokedAt) {
+      throw new NotFoundException('API key not found');
+    }
+    const isManager = caller.role !== null && KEY_MANAGER_ROLES.includes(caller.role);
+    if (!isManager && key.userId !== caller.userId) {
+      throw new ForbiddenException('You can only manage API keys you created');
+    }
+    return key;
   }
 
   async create(orgId: string, userId: string, name: string, permissions: ApiKeyScope[], testMode: boolean) {
@@ -56,36 +83,54 @@ export class ApiKeysService {
     }));
   }
 
-  async update(orgId: string, userId: string, keyId: string, data: { name?: string; permissions?: ApiKeyScope[] }) {
-    const key = await this.db.apiKey.findUnique({ where: { id: keyId } });
-    if (!key || key.orgId !== orgId || key.revokedAt) {
-      throw new NotFoundException('API key not found');
-    }
+  async update(
+    orgId: string,
+    caller: ApiKeyCaller,
+    keyId: string,
+    data: { name?: string; permissions?: ApiKeyScope[] },
+  ) {
+    await this.findManageableKey(orgId, caller, keyId);
     if (data.permissions) {
-      await this.assertScopesAllowedForCaller(orgId, userId, data.permissions);
+      await this.assertScopesAllowedForCaller(orgId, caller.userId, data.permissions);
     }
     return this.db.apiKey.update({ where: { id: keyId }, data });
   }
 
-  async revoke(orgId: string, keyId: string) {
-    const key = await this.db.apiKey.findUnique({ where: { id: keyId } });
-    if (!key || key.orgId !== orgId || key.revokedAt) {
-      throw new NotFoundException('API key not found');
-    }
+  async revoke(orgId: string, caller: ApiKeyCaller, keyId: string) {
+    await this.findManageableKey(orgId, caller, keyId);
     await this.db.apiKey.update({ where: { id: keyId }, data: { revokedAt: new Date() } });
   }
 
-  async verifyRawKey(raw: string) {
+  /**
+   * Verifies a raw key. Returns null when it is unknown, revoked, expired, or
+   * its creator is no longer a member of the key's org (or the key has no
+   * creator). Permissions are the stored ones intersected with the scopes the
+   * creator's current role allows.
+   */
+  async verifyRawKey(raw: string): Promise<VerifiedApiKey | null> {
     const prefix = raw.slice(0, 12);
     const candidates = await this.db.apiKey.findMany({ where: { keyPrefix: prefix, revokedAt: null } });
     for (const candidate of candidates) {
       if (candidate.expiresAt && candidate.expiresAt < new Date()) {
         continue;
       }
-      if (await comparePassword(raw, candidate.keyHash)) {
-        await this.db.apiKey.update({ where: { id: candidate.id }, data: { lastUsedAt: new Date() } });
-        return candidate;
+      if (!(await comparePassword(raw, candidate.keyHash))) {
+        continue;
       }
+      if (!candidate.userId) {
+        return null;
+      }
+      const creatorRole = await this.membership.currentRole(candidate.orgId, candidate.userId);
+      if (!creatorRole) {
+        return null;
+      }
+      await this.db.apiKey.update({ where: { id: candidate.id }, data: { lastUsedAt: new Date() } });
+      const allowed = new Set<string>(scopesAllowedForRole(creatorRole));
+      const stored = Array.isArray(candidate.permissions) ? candidate.permissions : [];
+      const permissions = stored.filter(
+        (scope): scope is ApiKeyScope => typeof scope === 'string' && allowed.has(scope),
+      );
+      return { id: candidate.id, orgId: candidate.orgId, userId: candidate.userId, permissions };
     }
     return null;
   }
