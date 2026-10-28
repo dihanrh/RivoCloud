@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { applySessionCookies, resolveSession } from './auth-session';
 import { backendFetch, BackendError } from './backend-fetch';
+import { clientForwardHeaders } from './forwarded-headers';
 
 export async function proxyToBackend(
   baseUrl: string,
@@ -17,7 +18,12 @@ export async function proxyToBackend(
   }
 
   try {
-    const data = await backendFetch(baseUrl, path, { ...init, accessToken: session.accessToken });
+    const forwarded = await clientForwardHeaders();
+    const data = await backendFetch(baseUrl, path, {
+      ...init,
+      headers: { ...forwarded, ...(init.headers as Record<string, string> | undefined) },
+      accessToken: session.accessToken,
+    });
     const response = NextResponse.json(data ?? {});
     if (session.newTokens) applySessionCookies(response, session.newTokens);
     return response;
