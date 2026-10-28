@@ -103,6 +103,28 @@ describe('API Keys', () => {
     return create.body.id as string;
   }
 
+  it("admin cannot grant scopes beyond the key creator's role", async () => {
+    const owner = await createOrg(app, 'capowner@example.com', 'Cap Owner', 'Cap Org');
+    const { token: devToken } = await joinOrg(app, owner.orgId, owner.ownerToken, 'capdev@example.com', 'developer');
+    const { token: adminToken } = await joinOrg(app, owner.orgId, owner.ownerToken, 'capadmin@example.com', 'admin');
+    const devKey = await createKey(devToken, 'dev key');
+
+    const escalate = await request(app.getHttpServer())
+      .patch(`/api/v1/api-keys/${devKey}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ permissions: ['billing:read'] });
+    expect(escalate.status).toBe(403);
+
+    const stored = await prisma.apiKey.findUniqueOrThrow({ where: { id: devKey } });
+    expect(stored.permissions).toEqual(['zone:read']);
+
+    const withinRole = await request(app.getHttpServer())
+      .patch(`/api/v1/api-keys/${devKey}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ permissions: ['cache:invalidate'] });
+    expect(withinRole.status).toBe(200);
+  });
+
   it("developer cannot revoke another member's key, admin can, developer can revoke own key", async () => {
     const owner = await createOrg(app, 'revokeowner@example.com', 'Revoke Owner', 'Revoke Org');
     const { token: dev1Token } = await joinOrg(app, owner.orgId, owner.ownerToken, 'revokedev1@example.com', 'developer');

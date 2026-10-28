@@ -37,10 +37,30 @@ export class ApiKeysService {
     if (!role) {
       throw new ForbiddenException('Not a member of this organization');
     }
+    this.assertScopesAllowedForRole(role, requested, `Your role (${role})`);
+  }
+
+  /**
+   * A key's scopes are always capped at its creator's current role, whoever
+   * edits it: an owner/admin cannot widen a developer's key past developer scopes.
+   */
+  private async assertScopesAllowedForKeyCreator(
+    orgId: string,
+    creatorId: string | null,
+    requested: ApiKeyScope[],
+  ) {
+    const role = creatorId ? await this.membership.currentRole(orgId, creatorId) : null;
+    if (!role) {
+      throw new ForbiddenException("The key's creator is no longer a member of this organization");
+    }
+    this.assertScopesAllowedForRole(role, requested, `The key creator's role (${role})`);
+  }
+
+  private assertScopesAllowedForRole(role: OrgRole, requested: ApiKeyScope[], subject: string) {
     const allowed = new Set(scopesAllowedForRole(role));
     const disallowed = requested.filter((scope) => !allowed.has(scope));
     if (disallowed.length > 0) {
-      throw new ForbiddenException(`Your role (${role}) cannot grant scopes: ${disallowed.join(', ')}`);
+      throw new ForbiddenException(`${subject} cannot grant scopes: ${disallowed.join(', ')}`);
     }
   }
 
@@ -89,9 +109,9 @@ export class ApiKeysService {
     keyId: string,
     data: { name?: string; permissions?: ApiKeyScope[] },
   ) {
-    await this.findManageableKey(orgId, caller, keyId);
+    const key = await this.findManageableKey(orgId, caller, keyId);
     if (data.permissions) {
-      await this.assertScopesAllowedForCaller(orgId, caller.userId, data.permissions);
+      await this.assertScopesAllowedForKeyCreator(orgId, key.userId, data.permissions);
     }
     return this.db.apiKey.update({ where: { id: keyId }, data });
   }
