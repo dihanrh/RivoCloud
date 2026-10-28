@@ -20,6 +20,8 @@ export class UsersController {
       name: user.name,
       avatarUrl: user.avatarUrl,
       emailVerified: user.emailVerified,
+      // Live role in the selected org (JwtOnlyGuard reads it from the DB; the JWT claim may be stale).
+      role: auth.role,
     };
   }
 
