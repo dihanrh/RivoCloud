@@ -4,16 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
-
-async function registerLoginCreateOrg(app: INestApplication, email: string, name: string, orgName: string) {
-  await request(app.getHttpServer()).post('/api/v1/auth/register').send({ email, password: 'hunter22222', name });
-  const login = await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email, password: 'hunter22222' });
-  const create = await request(app.getHttpServer())
-    .post('/api/v1/orgs')
-    .set('Authorization', `Bearer ${login.body.accessToken}`)
-    .send({ name: orgName });
-  return { orgId: create.body.organization.id as string, accessToken: create.body.accessToken as string };
-}
+import { createOrg, joinOrg } from '../test-support/org-fixtures.js';
 
 describe('API Keys', () => {
   let app: INestApplication;
@@ -37,7 +28,7 @@ describe('API Keys', () => {
   });
 
   it('lets an owner create a full-scope key, shown once, then list only its prefix', async () => {
-    const { accessToken } = await registerLoginCreateOrg(app, 'keyowner@example.com', 'Key Owner', 'Key Org');
+    const { ownerToken: accessToken } = await createOrg(app, 'keyowner@example.com', 'Key Owner', 'Key Org');
 
     const create = await request(app.getHttpServer())
       .post('/api/v1/api-keys')
@@ -56,13 +47,13 @@ describe('API Keys', () => {
   });
 
   it("rejects a developer's request for billing:read (broader than their role)", async () => {
-    const owner = await registerLoginCreateOrg(app, 'keyowner2@example.com', 'Key Owner2', 'Key Org 2');
+    const owner = await createOrg(app, 'keyowner2@example.com', 'Key Owner2', 'Key Org 2');
     await request(app.getHttpServer())
       .post('/api/v1/auth/register')
       .send({ email: 'keydev@example.com', password: 'hunter22222', name: 'Key Dev' });
     await request(app.getHttpServer())
       .post(`/api/v1/orgs/${owner.orgId}/members`)
-      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .set('Authorization', `Bearer ${owner.ownerToken}`)
       .send({ email: 'keydev@example.com', role: 'developer' });
     const devLogin = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
@@ -86,7 +77,7 @@ describe('API Keys', () => {
   });
 
   it('revokes a key so it no longer appears in the list', async () => {
-    const { accessToken } = await registerLoginCreateOrg(app, 'keyowner3@example.com', 'Key Owner3', 'Key Org 3');
+    const { ownerToken: accessToken } = await createOrg(app, 'keyowner3@example.com', 'Key Owner3', 'Key Org 3');
     const create = await request(app.getHttpServer())
       .post('/api/v1/api-keys')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -103,22 +94,6 @@ describe('API Keys', () => {
     expect(list.body).toHaveLength(0);
   });
 
-  async function joinAs(orgId: string, ownerToken: string, email: string, role: 'admin' | 'developer' | 'viewer') {
-    const server = app.getHttpServer();
-    await request(server).post('/api/v1/auth/register').send({ email, password: 'hunter22222', name: email });
-    const invite = await request(server)
-      .post(`/api/v1/orgs/${orgId}/members`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ email, role });
-    expect(invite.status).toBe(201);
-    const login = await request(server).post('/api/v1/auth/login').send({ email, password: 'hunter22222' });
-    const selected = await request(server)
-      .post('/api/v1/auth/select-org')
-      .set('Authorization', `Bearer ${login.body.accessToken}`)
-      .send({ orgId });
-    return selected.body.accessToken as string;
-  }
-
   async function createKey(token: string, name: string) {
     const create = await request(app.getHttpServer())
       .post('/api/v1/api-keys')
@@ -129,10 +104,10 @@ describe('API Keys', () => {
   }
 
   it("developer cannot revoke another member's key, admin can, developer can revoke own key", async () => {
-    const owner = await registerLoginCreateOrg(app, 'revokeowner@example.com', 'Revoke Owner', 'Revoke Org');
-    const dev1Token = await joinAs(owner.orgId, owner.accessToken, 'revokedev1@example.com', 'developer');
-    const dev2Token = await joinAs(owner.orgId, owner.accessToken, 'revokedev2@example.com', 'developer');
-    const adminToken = await joinAs(owner.orgId, owner.accessToken, 'revokeadmin@example.com', 'admin');
+    const owner = await createOrg(app, 'revokeowner@example.com', 'Revoke Owner', 'Revoke Org');
+    const { token: dev1Token } = await joinOrg(app, owner.orgId, owner.ownerToken, 'revokedev1@example.com', 'developer');
+    const { token: dev2Token } = await joinOrg(app, owner.orgId, owner.ownerToken, 'revokedev2@example.com', 'developer');
+    const { token: adminToken } = await joinOrg(app, owner.orgId, owner.ownerToken, 'revokeadmin@example.com', 'admin');
     const dev2KeyA = await createKey(dev2Token, 'dev2 key A');
     const dev2KeyB = await createKey(dev2Token, 'dev2 key B');
     const dev1Key = await createKey(dev1Token, 'dev1 key');
@@ -155,7 +130,7 @@ describe('API Keys', () => {
 
     const byOwner = await request(app.getHttpServer())
       .delete(`/api/v1/api-keys/${dev2KeyB}`)
-      .set('Authorization', `Bearer ${owner.accessToken}`);
+      .set('Authorization', `Bearer ${owner.ownerToken}`);
     expect(byOwner.status).toBe(200);
 
     const own = await request(app.getHttpServer())

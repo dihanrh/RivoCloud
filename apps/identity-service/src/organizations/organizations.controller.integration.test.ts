@@ -4,42 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
-
-async function registerAndLogin(app: INestApplication, email: string, name: string) {
-  await request(app.getHttpServer()).post('/api/v1/auth/register').send({ email, password: 'hunter22222', name });
-  const login = await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email, password: 'hunter22222' });
-  return login.body.accessToken as string;
-}
-
-async function createOrg(app: INestApplication, email: string, name: string, orgName: string) {
-  const token = await registerAndLogin(app, email, name);
-  const create = await request(app.getHttpServer())
-    .post('/api/v1/orgs')
-    .set('Authorization', `Bearer ${token}`)
-    .send({ name: orgName });
-  return { orgId: create.body.organization.id as string, ownerToken: create.body.accessToken as string };
-}
-
-async function joinOrg(
-  app: INestApplication,
-  orgId: string,
-  inviterToken: string,
-  email: string,
-  role: 'admin' | 'developer' | 'viewer',
-) {
-  await registerAndLogin(app, email, email.split('@')[0] ?? email);
-  const invite = await request(app.getHttpServer())
-    .post(`/api/v1/orgs/${orgId}/members`)
-    .set('Authorization', `Bearer ${inviterToken}`)
-    .send({ email, role });
-  expect(invite.status).toBe(201);
-  const login = await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email, password: 'hunter22222' });
-  const selected = await request(app.getHttpServer())
-    .post('/api/v1/auth/select-org')
-    .set('Authorization', `Bearer ${login.body.accessToken}`)
-    .send({ orgId });
-  return { userId: invite.body.userId as string, token: selected.body.accessToken as string };
-}
+import { createOrg, joinOrg, registerAndLogin } from '../test-support/org-fixtures.js';
 
 describe('Organizations + Members', () => {
   let app: INestApplication;

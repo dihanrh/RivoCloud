@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
+import { orgWithDeveloper } from '../test-support/org-fixtures.js';
 import { AuthGuard } from './auth-guard.js';
 import { AuthModule } from './auth.module.js';
 import { ApiKeysModule } from '../api-keys/api-keys.module.js';
@@ -87,39 +88,8 @@ describe('AuthGuard: accepts both a JWT bearer token and an X-API-Key header', (
     expect(withRevokedKey.status).toBe(401);
   });
 
-  async function orgWithDeveloper(prefix: string) {
-    const server = app.getHttpServer();
-    await request(server)
-      .post('/api/v1/auth/register')
-      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222', name: 'Owner' });
-    const ownerLogin = await request(server)
-      .post('/api/v1/auth/login')
-      .send({ email: `${prefix}owner@example.com`, password: 'hunter22222' });
-    const org = await request(server)
-      .post('/api/v1/orgs')
-      .set('Authorization', `Bearer ${ownerLogin.body.accessToken}`)
-      .send({ name: `${prefix} Org` });
-    const orgId = org.body.organization.id as string;
-    const ownerToken = org.body.accessToken as string;
-    await request(server)
-      .post('/api/v1/auth/register')
-      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222', name: 'Dev' });
-    const invite = await request(server)
-      .post(`/api/v1/orgs/${orgId}/members`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ email: `${prefix}dev@example.com`, role: 'developer' });
-    const devLogin = await request(server)
-      .post('/api/v1/auth/login')
-      .send({ email: `${prefix}dev@example.com`, password: 'hunter22222' });
-    const devSelect = await request(server)
-      .post('/api/v1/auth/select-org')
-      .set('Authorization', `Bearer ${devLogin.body.accessToken}`)
-      .send({ orgId });
-    return { orgId, ownerToken, devUserId: invite.body.userId as string, devToken: devSelect.body.accessToken as string };
-  }
-
   it('reads the JWT caller role live and rejects a removed member', async () => {
-    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('guardlive');
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'guardlive');
     await request(app.getHttpServer())
       .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -138,7 +108,7 @@ describe('AuthGuard: accepts both a JWT bearer token and an X-API-Key header', (
   });
 
   it("caps an API key's permissions at its creator's current role", async () => {
-    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper('guardcap');
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'guardcap');
     const key = await request(app.getHttpServer())
       .post('/api/v1/api-keys')
       .set('Authorization', `Bearer ${devToken}`)
