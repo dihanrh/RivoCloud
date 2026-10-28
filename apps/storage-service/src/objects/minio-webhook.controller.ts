@@ -1,4 +1,5 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { NoAudit } from '@rivocloud/security';
 import { MinioWebhookAuthGuard } from './minio-webhook-auth.guard.js';
 import { ObjectsService } from './objects.service.js';
 
@@ -8,6 +9,7 @@ interface MinioNotificationBody {
   }>;
 }
 
+@NoAudit()
 @Controller('internal/storage')
 export class MinioWebhookController {
   constructor(private readonly objects: ObjectsService) {}

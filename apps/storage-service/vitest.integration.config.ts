@@ -7,5 +7,6 @@ export default defineConfig({
     include: ['src/**/*.integration.test.ts'],
     testTimeout: 20000,
     fileParallelism: false,
+    env: { RATE_LIMIT_ENABLED: 'false' },
   },
 });

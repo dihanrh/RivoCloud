@@ -426,12 +426,18 @@ importers:
       '@rivocloud/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@rivocloud/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
       class-validator:
         specifier: ^0.14.1
         version: 0.14.4
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
       minio:
         specifier: ^8.0.7
         version: 8.0.7
