@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import type { OrgRole } from '@rivocloud/security';
+import { Audit, type OrgRole } from '@rivocloud/security';
 import { JwtOnlyGuard } from '../auth/jwt-only.guard.js';
 import { AuthCtx, type AuthContext } from '../auth/auth-context.decorator.js';
 import { OrganizationsService } from './organizations.service.js';
@@ -20,6 +20,7 @@ export class OrganizationsController {
   ) {}
 
   @Post()
+  @Audit('org.created', { resourceType: 'organization', idPath: 'organization.id', orgIdPath: 'organization.id' })
   async create(@AuthCtx() authCtx: AuthContext, @Body() dto: CreateOrgDto) {
     const org = await this.orgs.create(authCtx.userId, dto.name);
     const tokens = await this.auth.selectOrg(authCtx.userId, org.id);
@@ -37,12 +38,15 @@ export class OrganizationsController {
   }
 
   @Patch(':orgId')
+  @Audit('org.updated', { resourceType: 'organization', idParam: 'orgId', bodyFields: ['name'] })
   @Roles('owner', 'admin')
   async update(@Param('orgId') orgId: string, @Body() dto: UpdateOrgDto) {
     return this.orgs.update(orgId, dto);
   }
 
   @Delete(':orgId')
+  // The org row is deleted, so the entry cannot reference it.
+  @Audit('org.deleted', { resourceType: 'organization', idParam: 'orgId', detachOrg: true })
   @Roles('owner')
   async remove(@Param('orgId') orgId: string) {
     await this.orgs.delete(orgId);
@@ -55,6 +59,7 @@ export class OrganizationsController {
   }
 
   @Post(':orgId/members')
+  @Audit('member.added', { resourceType: 'member', idPath: 'userId', bodyFields: ['email', 'role'] })
   @Roles('owner', 'admin')
   async addMember(
     @AuthCtx() authCtx: AuthContext,
@@ -66,6 +71,7 @@ export class OrganizationsController {
   }
 
   @Patch(':orgId/members/:userId')
+  @Audit('member.role_updated', { resourceType: 'member', idParam: 'userId', bodyFields: ['role'] })
   @Roles('owner')
   async updateMember(
     @Param('orgId') orgId: string,
@@ -76,6 +82,7 @@ export class OrganizationsController {
   }
 
   @Delete(':orgId/members/:userId')
+  @Audit('member.removed', { resourceType: 'member', idParam: 'userId' })
   @Roles('owner', 'admin')
   async removeMember(@Req() req: { orgRole: OrgRole }, @Param('orgId') orgId: string, @Param('userId') userId: string) {
     await this.orgs.removeMember(orgId, req.orgRole, userId);

@@ -1,5 +1,6 @@
 import { Body, Controller, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { IsString } from 'class-validator';
+import { NoAudit } from '@rivocloud/security';
 import { InternalSecretGuard } from './internal-secret.guard.js';
 import { TokenService } from '../auth/token.service.js';
 import { ApiKeysService } from '../api-keys/api-keys.service.js';
@@ -15,6 +16,8 @@ class VerifyApiKeyDto {
   apiKey!: string;
 }
 
+// Service-to-service verification calls are reads in effect; nothing to audit.
+@NoAudit()
 @Controller('internal/auth')
 @UseGuards(InternalSecretGuard)
 export class InternalController {
