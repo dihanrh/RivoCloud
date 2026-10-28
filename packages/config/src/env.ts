@@ -5,6 +5,11 @@ export const baseEnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   NATS_URL: z.string().url(),
+  TRUST_PROXY: z.string().default('loopback, linklocal, uniquelocal'),
+  RATE_LIMIT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;
