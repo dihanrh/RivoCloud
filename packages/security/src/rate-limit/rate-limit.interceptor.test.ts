@@ -14,7 +14,13 @@ class Ctl {
   plain() {}
 }
 
-function setup(opts: { handler?: keyof Ctl; request?: Record<string, unknown>; enabled?: boolean; hit?: ReturnType<typeof vi.fn> }) {
+function setup(opts: {
+  handler?: keyof Ctl;
+  request?: Record<string, unknown>;
+  enabled?: boolean;
+  hit?: ReturnType<typeof vi.fn>;
+  limiterTimeoutMs?: number;
+}) {
   const hit = opts.hit ?? vi.fn().mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
   const setHeader = vi.fn();
   const request = opts.request ?? {};
@@ -27,6 +33,7 @@ function setup(opts: { handler?: keyof Ctl; request?: Record<string, unknown>; e
   const next = { handle } as CallHandler;
   const interceptor = new RateLimitInterceptor(new Reflector(), { hit } as never, {
     rateLimitEnabled: opts.enabled ?? true,
+    ...(opts.limiterTimeoutMs === undefined ? {} : { limiterTimeoutMs: opts.limiterTimeoutMs }),
   });
   return { interceptor, context, next, hit, setHeader, handle };
 }
@@ -92,6 +99,43 @@ describe('RateLimitInterceptor', () => {
     await lastValueFrom(await t.interceptor.intercept(t.context, t.next));
     expect(t.handle).toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('fails open quickly when the limiter never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      const hit = vi.fn(() => new Promise(() => undefined));
+      const t = setup({ hit, request: { auth: { type: 'jwt', userId: 'u1', orgId: 'o1', role: 'admin' } } });
+      const pending = t.interceptor.intercept(t.context, t.next);
+      await vi.advanceTimersByTimeAsync(250);
+      await lastValueFrom(await pending);
+      expect(t.handle).toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('timed out after 250ms'));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honours a configured limiterTimeoutMs and clears its timer on success', async () => {
+    vi.useFakeTimers();
+    try {
+      const never = setup({
+        hit: vi.fn(() => new Promise(() => undefined)),
+        limiterTimeoutMs: 50,
+        request: { auth: { type: 'jwt', userId: 'u1', orgId: 'o1', role: 'admin' } },
+      });
+      const pending = never.interceptor.intercept(never.context, never.next);
+      await vi.advanceTimersByTimeAsync(50);
+      await lastValueFrom(await pending);
+      expect(never.handle).toHaveBeenCalled();
+
+      const fast = setup({ request: { auth: { type: 'jwt', userId: 'u1', orgId: 'o1', role: 'admin' } } });
+      await lastValueFrom(await fast.interceptor.intercept(fast.context, fast.next));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does nothing when rateLimitEnabled is false', async () => {

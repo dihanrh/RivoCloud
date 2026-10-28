@@ -19,6 +19,13 @@ export const RATE_LIMITS = {
 export const SECURITY_REDIS = Symbol('SECURITY_REDIS');
 export const SECURITY_OPTIONS = Symbol('SECURITY_OPTIONS');
 
+export const DEFAULT_LIMITER_TIMEOUT_MS = 250;
+
 export interface SecurityOptions {
   rateLimitEnabled: boolean;
+  /**
+   * Upper bound on one limiter round-trip. A slower (or never-settling) call is treated
+   * like a Redis error: the request is allowed (fail-open). Defaults to DEFAULT_LIMITER_TIMEOUT_MS.
+   */
+  limiterTimeoutMs?: number;
 }

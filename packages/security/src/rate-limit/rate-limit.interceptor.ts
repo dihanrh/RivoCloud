@@ -12,8 +12,14 @@ import { Reflector } from '@nestjs/core';
 import type { Observable } from 'rxjs';
 import type { SecurityAuthContext } from '../rbac/auth-context.js';
 import { RATE_LIMIT_KEY } from './rate-limit.decorator.js';
-import { RATE_LIMITS, SECURITY_OPTIONS, type RateLimitPolicy, type SecurityOptions } from './policies.js';
-import { SlidingWindowLimiter } from './sliding-window.js';
+import {
+  DEFAULT_LIMITER_TIMEOUT_MS,
+  RATE_LIMITS,
+  SECURITY_OPTIONS,
+  type RateLimitPolicy,
+  type SecurityOptions,
+} from './policies.js';
+import { SlidingWindowLimiter, type HitResult } from './sliding-window.js';
 
 interface RateLimitedRequest {
   ip?: string;
@@ -43,11 +49,7 @@ export class RateLimitInterceptor implements NestInterceptor {
       for (const policy of policies) {
         const keyValue = this.keyValue(policy, request);
         if (keyValue === null) continue;
-        const result = await this.limiter.hit(
-          `ratelimit:${policy.name}:${keyValue}`,
-          policy.limit,
-          policy.windowSeconds,
-        );
+        const result = await this.boundedHit(`ratelimit:${policy.name}:${keyValue}`, policy);
         if (!result.allowed) {
           http.getResponse().setHeader('Retry-After', String(result.retryAfterSeconds));
           throw new HttpException({ statusCode: 429, message: 'Too many requests' }, HttpStatus.TOO_MANY_REQUESTS);
@@ -55,10 +57,29 @@ export class RateLimitInterceptor implements NestInterceptor {
       }
     } catch (err) {
       if (err instanceof HttpException) throw err;
-      // Fail open: a Redis outage must not take the API down.
+      // Fail open: a Redis outage (error or timeout) must not take the API down or stall it.
       this.logger.warn(`Rate limiter unavailable, allowing request: ${(err as Error).message}`);
     }
     return next.handle();
+  }
+
+  /**
+   * Races the limiter against a timer. ioredis queues commands while disconnected and only
+   * rejects after its retries are exhausted (seconds), so without a bound an outage would
+   * stall every request instead of failing open.
+   */
+  private async boundedHit(key: string, policy: RateLimitPolicy): Promise<HitResult> {
+    const timeoutMs = this.options.limiterTimeoutMs ?? DEFAULT_LIMITER_TIMEOUT_MS;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`rate limiter timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    try {
+      // Promise.race subscribes to both, so a late rejection of the losing hit is handled.
+      return await Promise.race([this.limiter.hit(key, policy.limit, policy.windowSeconds), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private policiesFor(context: ExecutionContext, request: RateLimitedRequest): RateLimitPolicy[] {
