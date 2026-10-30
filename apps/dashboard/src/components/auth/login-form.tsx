@@ -1,33 +1,58 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import Link from 'next/link';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { apiFetch, errorMessage } from '@/lib/http';
-import { loginSchema } from '@/lib/validation';
+import { apiFetch } from '@/lib/http';
+import { fieldErrors, loginSchema } from '@/lib/validation';
 import type { Organization } from '@/lib/types';
+import { authErrorMessage, INVALID_CREDENTIALS } from './auth-errors';
+import { DemoAccounts } from './demo-accounts';
+import { authInputClass, FormBanner, FormField } from './form-field';
+import { PasswordInput } from './password-input';
 
 export interface LoginResult {
   org: string | null;
   orgs?: Organization[];
 }
 
-export function LoginForm({ onSuccess }: { onSuccess: (result: LoginResult) => void }) {
+type Field = 'email' | 'password';
+
+export function LoginForm({
+  onSuccess,
+  afterForm,
+}: {
+  onSuccess: (result: LoginResult) => void;
+  /** Rendered between the form and the demo panel (e.g. the link to sign up). */
+  afterForm?: React.ReactNode;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  function clearError(field: Field) {
+    setErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
+    if (submitting) return;
+    setServerError(null);
 
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter a valid email and password');
+      const next = fieldErrors(parsed.error) as Partial<Record<Field, string>>;
+      setErrors(next);
+      (next.email ? emailRef : passwordRef).current?.focus();
       return;
     }
+    setErrors({});
 
     setSubmitting(true);
     try {
@@ -37,26 +62,85 @@ export function LoginForm({ onSuccess }: { onSuccess: (result: LoginResult) => v
       });
       onSuccess(result);
     } catch (err) {
-      setError(errorMessage(err, 'Could not log in. Check your email and password and try again.'));
-    } finally {
+      setServerError(authErrorMessage(err, { 400: INVALID_CREDENTIALS, 401: INVALID_CREDENTIALS }));
       setSubmitting(false);
+      passwordRef.current?.select();
     }
+    // On success the button stays busy while the router navigates away.
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="password">Password</Label>
-        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-      </div>
-      {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
-      <Button type="submit" size="lg" disabled={submitting}>
-        {submitting ? 'Logging in…' : 'Log in'}
-      </Button>
-    </form>
+    <>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate aria-busy={submitting}>
+        {serverError && <FormBanner>{serverError}</FormBanner>}
+
+        <FormField id="email" label="Email" error={errors.email}>
+          {(aria) => (
+            <Input
+              ref={emailRef}
+              id="email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              autoFocus
+              placeholder="you@company.com"
+              className={authInputClass}
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clearError('email');
+              }}
+              {...aria}
+            />
+          )}
+        </FormField>
+
+        <FormField
+          id="password"
+          label="Password"
+          error={errors.password}
+          labelAside={
+            <Link href="/forgot-password" className="rounded-sm text-[13px] font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
+          }
+        >
+          {(aria) => (
+            <PasswordInput
+              ref={passwordRef}
+              id="password"
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clearError('password');
+              }}
+              {...aria}
+            />
+          )}
+        </FormField>
+
+        <Button type="submit" size="lg" className="mt-1 h-11 w-full text-[14px]" disabled={submitting}>
+          {submitting && <Loader2 className="animate-spin" aria-hidden />}
+          {submitting ? 'Logging in…' : 'Log in'}
+        </Button>
+      </form>
+
+      {afterForm}
+
+      <DemoAccounts
+        onPick={(demoEmail, demoPassword) => {
+          setEmail(demoEmail);
+          setPassword(demoPassword);
+          setErrors({});
+          setServerError(null);
+          passwordRef.current?.focus();
+        }}
+      />
+    </>
   );
 }

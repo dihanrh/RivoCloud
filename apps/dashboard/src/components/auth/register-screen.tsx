@@ -11,14 +11,19 @@ export function RegisterScreen() {
   const router = useRouter();
 
   return (
-    <AuthLayout title="Create your account" description="Start with a free account. You can add websites and buckets right away.">
+    <AuthLayout
+      title="Create your account"
+      description="Free to start. Add your first website or bucket in a couple of minutes."
+      aside={
+        <p className="text-center">
+          Already have an account?{' '}
+          <Link href="/login" className="rounded-sm font-medium text-primary hover:underline">
+            Log in
+          </Link>
+        </p>
+      }
+    >
       <RegisterForm onSuccess={(result: LoginResult) => void routeAfterLogin(result, router)} />
-      <p className="text-[13px] text-muted-foreground">
-        Already have an account?{' '}
-        <Link href="/login" className="text-primary hover:underline">
-          Log in
-        </Link>
-      </p>
     </AuthLayout>
   );
 }

@@ -9,9 +9,11 @@ describe('LoginScreen', () => {
   it('renders the brand logo, the form and a link to register', () => {
     render(<LoginScreen />);
 
-    expect(screen.getByAltText('RivoCloud')).toBeInTheDocument();
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'RivoCloud home' })[0]).toHaveAttribute('href', '/');
+    expect(screen.getByRole('heading', { level: 1, name: /log in/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /back to home/i })[0]).toHaveAttribute('href', '/');
     expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /create an account/i })).toHaveAttribute('href', '/register');
   });

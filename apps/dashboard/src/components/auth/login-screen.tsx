@@ -21,14 +21,18 @@ export function LoginScreen({ next }: { next?: string }) {
   }
 
   return (
-    <AuthLayout title="Log in" description="Welcome back. Log in to manage your websites and storage.">
-      <LoginForm onSuccess={handleSuccess} />
-      <p className="text-[13px] text-muted-foreground">
-        New to RivoCloud?{' '}
-        <Link href="/register" className="text-primary hover:underline">
-          Create an account
-        </Link>
-      </p>
+    <AuthLayout title="Log in to RivoCloud" description="Welcome back. Manage your websites, caching and storage.">
+      <LoginForm
+        onSuccess={handleSuccess}
+        afterForm={
+          <p className="text-center text-[13.5px] text-muted-foreground">
+            New to RivoCloud?{' '}
+            <Link href="/register" className="rounded-sm font-medium text-primary hover:underline">
+              Create an account
+            </Link>
+          </p>
+        }
+      />
     </AuthLayout>
   );
 }

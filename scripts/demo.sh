@@ -44,6 +44,8 @@ default ANALYTICS_SERVICE_URL "http://localhost:3006"
 default SCHEDULER_SERVICE_URL "http://localhost:3005"
 # Seeding logs in 4 users and calls hot endpoints; the 10/min auth limit would trip it.
 export RATE_LIMIT_ENABLED=false
+# Shows the "Demo accounts" quick-fill panel on the dashboard login page.
+export NEXT_PUBLIC_DEMO_MODE=true
 # Override if something else already owns :3000, e.g. DASHBOARD_PORT=3010 bash scripts/demo.sh
 DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
 
