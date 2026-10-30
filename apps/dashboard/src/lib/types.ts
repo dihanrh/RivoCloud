@@ -185,3 +185,62 @@ export interface AuditLogPage {
   items: AuditLogEntry[];
   nextCursor: string | null;
 }
+
+export type CacheRulePatternType = 'glob' | 'regex' | 'exact';
+export type CacheRuleAction = 'cache' | 'bypass' | 'no-store';
+export type CacheRuleQueryString = 'strip_all' | 'whitelist' | 'include_all';
+
+export interface CacheRule {
+  id: string;
+  zoneId: string;
+  pattern: string;
+  patternType: CacheRulePatternType;
+  action: CacheRuleAction;
+  edgeTtl: number | null;
+  browserTtl: number | null;
+  queryString: CacheRuleQueryString;
+  queryWhitelist: string[];
+  priority: number;
+  createdAt: string;
+}
+
+export interface CacheRuleList {
+  rules: CacheRule[];
+  total: number;
+}
+
+// Body for creating or editing a cache rule. `null` TTLs clear an override on edit.
+export interface CacheRuleInput {
+  pattern: string;
+  patternType: CacheRulePatternType;
+  action: CacheRuleAction;
+  edgeTtl?: number | null;
+  browserTtl?: number | null;
+  queryString: CacheRuleQueryString;
+  queryWhitelist?: string[];
+  priority?: number;
+}
+
+export interface CacheInvalidation {
+  id: string;
+  zoneId: string;
+  createdBy: string | null;
+  patterns: string[];
+  tags: string[];
+  // 'pending' | 'completed' | 'failed'
+  status: string;
+  edgesNotified: number | null;
+  keysPurged: number | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface CacheInvalidationList {
+  invalidations: CacheInvalidation[];
+  total: number;
+}
+
+export interface CacheInvalidationResult {
+  invalidationId: string;
+  status: string;
+}

@@ -57,7 +57,7 @@ describe('ShareLinkDialog', () => {
 
     renderWithProviders(<ShareLinkDialog bucketId="bucket-1" objectKey="report.pdf" onOpenChange={vi.fn()} />);
 
-    const zoneSelect = await screen.findByLabelText(/zone/i);
+    const zoneSelect = await screen.findByLabelText(/website/i);
     expect(await screen.findByRole('option', { name: 'Private files' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Public site' })).not.toBeInTheDocument();
     expect(zoneSelect).toHaveValue('zone-private');
@@ -76,7 +76,7 @@ describe('ShareLinkDialog', () => {
   it('explains what to do when no zone requires signed URLs', async () => {
     stubBackend([makeZone({ name: 'Public site' })]);
     renderWithProviders(<ShareLinkDialog bucketId="bucket-1" objectKey="report.pdf" onOpenChange={vi.fn()} />);
-    expect(await screen.findByText(/no zone requires signed urls yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no website requires signed urls yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /create link/i })).not.toBeInTheDocument();
   });
 

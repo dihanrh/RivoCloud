@@ -1,6 +1,9 @@
 'use client';
 
+import { ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { EmptyState, ErrorBanner } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuditLogs } from '@/hooks/use-audit-logs';
@@ -27,9 +30,18 @@ export function AuditLogPanel({ orgId }: { orgId: string }) {
   return (
     <div className="flex flex-col gap-4">
       {isLoading && <Skeleton className="h-32 w-full" />}
-      {error && <p className="text-destructive">Failed to load the audit log.</p>}
-      {data && entries.length === 0 && <p className="text-sm text-muted-foreground">No audit events yet.</p>}
+      {error && <ErrorBanner>Could not load the audit log. Refresh the page to try again.</ErrorBanner>}
+      {data && entries.length === 0 && (
+        <Card>
+          <EmptyState
+            icon={ScrollText}
+            title="No audit events yet"
+            description="Changes to websites, buckets, members and API keys will show up here."
+          />
+        </Card>
+      )}
       {entries.length > 0 && (
+        <Card>
         <Table>
           <TableHeader>
             <TableRow>
@@ -43,15 +55,16 @@ export function AuditLogPanel({ orgId }: { orgId: string }) {
           <TableBody>
             {entries.map((entry) => (
               <TableRow key={entry.id}>
-                <TableCell>{new Date(entry.createdAt).toLocaleString()}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</TableCell>
                 <TableCell>{actorLabel(entry)}</TableCell>
-                <TableCell className="font-mono">{entry.action}</TableCell>
+                <TableCell className="font-mono text-xs">{entry.action}</TableCell>
                 <TableCell>{resourceLabel(entry)}</TableCell>
                 <TableCell>{entry.ipAddress ?? '—'}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        </Card>
       )}
       {hasNextPage && (
         <div>

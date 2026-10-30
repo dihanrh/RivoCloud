@@ -3,6 +3,7 @@
 import { useAnalyticsGeography } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export function GeographyTable({ params }: { params: AnalyticsQueryParams }) {
   const { data, isLoading } = useAnalyticsGeography(params);
@@ -10,28 +11,28 @@ export function GeographyTable({ params }: { params: AnalyticsQueryParams }) {
   const countries = data?.countries ?? [];
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-muted-foreground">
-          <th className="pb-2">Country</th>
-          <th className="pb-2">Requests</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Country</TableHead>
+          <TableHead className="text-right">Requests</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {countries.map((row) => (
-          <tr key={row.country}>
-            <td className="py-1">{row.country}</td>
-            <td className="py-1">{row.requests.toLocaleString()}</td>
-          </tr>
+          <TableRow key={row.country}>
+            <TableCell>{row.country}</TableCell>
+            <TableCell className="text-right tabular-nums">{row.requests.toLocaleString()}</TableCell>
+          </TableRow>
         ))}
         {countries.length === 0 && (
-          <tr>
-            <td colSpan={2} className="py-4 text-muted-foreground">
+          <TableRow>
+            <TableCell colSpan={2} className="py-6 text-muted-foreground">
               No data for this range.
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         )}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ErrorBanner } from '@/components/ui/empty-state';
+import { Input, Select } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,8 +13,6 @@ import { useAddMember, useMembers, useRemoveMember, useUpdateMemberRole } from '
 import { canChangeRoles, canManageMembers } from '@/lib/rbac';
 import { errorMessage } from '@/lib/http';
 import type { OrgMember, OrgRole } from '@/lib/types';
-
-const SELECT_CLASS = 'h-9 rounded-md border border-input bg-transparent px-3 text-sm';
 
 type InviteRole = Exclude<OrgRole, 'owner'>;
 
@@ -44,7 +45,7 @@ export function MembersPanel({ orgId, role }: { orgId: string; role: string | nu
       await addMember.mutateAsync({ email, role: inviteRole });
       setEmail('');
     } catch (err) {
-      setMessage(errorMessage(err, 'Could not add member'));
+      setMessage(errorMessage(err, 'Could not invite the member. Check the email and try again.'));
     }
   }
 
@@ -53,7 +54,7 @@ export function MembersPanel({ orgId, role }: { orgId: string; role: string | nu
     try {
       await updateRole.mutateAsync({ userId, role: newRole });
     } catch (err) {
-      setMessage(errorMessage(err, 'Could not change role'));
+      setMessage(errorMessage(err, 'Could not change the role. Try again.'));
     }
   }
 
@@ -62,101 +63,112 @@ export function MembersPanel({ orgId, role }: { orgId: string; role: string | nu
     try {
       await removeMember.mutateAsync(userId);
     } catch (err) {
-      setMessage(errorMessage(err, 'Could not remove member'));
+      setMessage(errorMessage(err, 'Could not remove the member. Try again.'));
     }
   }
 
   return (
     <div className="flex flex-col gap-6">
       {canManageMembers(role) && (
-        <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="invite-email">Email</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="teammate@example.com"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="invite-role">Role</Label>
-            <select
-              id="invite-role"
-              className={SELECT_CLASS}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as InviteRole)}
-            >
-              {inviteRoles.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button type="submit" disabled={addMember.isPending}>
-            {addMember.isPending ? 'Inviting…' : 'Invite'}
-          </Button>
-        </form>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Invite a member</CardTitle>
+            <CardDescription>The person needs a RivoCloud account with this email.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-3">
+              <div className="flex min-w-56 flex-1 flex-col gap-1.5">
+                <Label htmlFor="invite-email">Email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="teammate@example.com"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="invite-role">Role</Label>
+                <Select id="invite-role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as InviteRole)}>
+                  {inviteRoles.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <Button type="submit" disabled={addMember.isPending}>
+                {addMember.isPending ? 'Inviting…' : 'Invite member'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
-      {message && <p className="text-sm text-destructive">{message}</p>}
+      {message && <ErrorBanner>{message}</ErrorBanner>}
       {isLoading && <Skeleton className="h-32 w-full" />}
-      {error && <p className="text-destructive">Failed to load members.</p>}
+      {error && <ErrorBanner>Could not load members. Refresh the page to try again.</ErrorBanner>}
       {members && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {members.map((member) => (
-              <TableRow key={member.userId}>
-                <TableCell>{member.user.name}</TableCell>
-                <TableCell>{member.user.email}</TableCell>
-                <TableCell>
-                  {canChangeRoles(role) && member.role !== 'owner' ? (
-                    <select
-                      aria-label={`Role for ${member.user.email}`}
-                      className={SELECT_CLASS}
-                      value={member.role}
-                      disabled={updateRole.isPending}
-                      onChange={(e) => void handleRoleChange(member.userId, e.target.value as OrgRole)}
-                    >
-                      {(['admin', 'developer', 'viewer'] as const).map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    member.role
-                  )}
-                </TableCell>
-                <TableCell>{member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}</TableCell>
-                <TableCell className="text-right">
-                  {canRemove(role, member) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      aria-label={`Remove ${member.user.email}`}
-                      disabled={removeMember.isPending}
-                      onClick={() => void handleRemove(member.userId)}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </TableCell>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {members.map((member) => (
+                <TableRow key={member.userId}>
+                  <TableCell className="font-medium">{member.user.name}</TableCell>
+                  <TableCell>{member.user.email}</TableCell>
+                  <TableCell>
+                    {canChangeRoles(role) && member.role !== 'owner' ? (
+                      <Select
+                        aria-label={`Role for ${member.user.email}`}
+                        className="h-8 w-auto text-[13px]"
+                        value={member.role}
+                        disabled={updateRole.isPending}
+                        onChange={(e) => void handleRoleChange(member.userId, e.target.value as OrgRole)}
+                      >
+                        {(['admin', 'developer', 'viewer'] as const).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>{member.role}</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end">
+                      {canRemove(role, member) && (
+                        <Button
+                          variant="destructive-outline"
+                          size="sm"
+                          aria-label={`Remove ${member.user.email}`}
+                          disabled={removeMember.isPending}
+                          onClick={() => void handleRemove(member.userId)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

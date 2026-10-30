@@ -27,7 +27,7 @@ describe('AnalyticsFilters', () => {
     const onChange = vi.fn();
     renderWithClient(<AnalyticsFilters params={{ rangeKey: '24h' }} onChange={onChange} />);
 
-    const zoneSelect = await screen.findByLabelText('Zone');
+    const zoneSelect = await screen.findByLabelText('Website');
     // Wait for the zones query to resolve and populate the <option> before selecting it —
     // otherwise jsdom silently ignores setting .value to an option that doesn't exist yet.
     await screen.findByText('My Blog');

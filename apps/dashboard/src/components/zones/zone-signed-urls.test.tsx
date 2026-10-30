@@ -1,70 +1,60 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ZoneSignedUrls } from './zone-signed-urls';
-import type { Zone } from '@/lib/types';
+import { apiCalls, makeZone, mockApi, renderWithClient } from './test-utils';
 
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-}
-
-const zone: Zone = {
-  id: 'zone-1',
-  orgId: 'org-1',
-  projectId: null,
-  name: 'private',
-  slug: 'private',
-  originUrl: 'https://origin.example.com',
-  originProtocol: 'https',
-  cacheTtl: 3600,
-  browserTtl: 0,
-  enabled: true,
-  signedUrlsRequired: false,
-  hasSigningSecret: false,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-};
+const zone = makeZone({ id: 'zone-1', name: 'private', browserTtl: 0 });
 
 describe('ZoneSignedUrls', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
+  afterEach(() => vi.unstubAllGlobals());
 
   it('turns signed URLs on through the zone PATCH endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...zone, signedUrlsRequired: true }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = mockApi([{ method: 'PATCH', url: '/api/zones/zone-1', body: { ...zone, signedUrlsRequired: true } }]);
+    renderWithClient(<ZoneSignedUrls zone={zone} />);
 
-    renderWithProviders(<ZoneSignedUrls zone={zone} />);
-    await userEvent.click(screen.getByRole('checkbox', { name: /require signed urls/i }));
+    const toggle = screen.getByRole('switch', { name: /require signed urls/i });
+    await vi.waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(apiCalls(fetchMock, 'PATCH')).toHaveLength(1));
+    expect(apiCalls(fetchMock, 'PATCH')[0]).toEqual([
       '/api/zones/zone-1',
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ signedUrlsRequired: true }) }),
-    );
+      expect.objectContaining({ body: JSON.stringify({ signedUrlsRequired: true }) }),
+    ]);
   });
 
-  it('hides the rotate button until the zone has a secret', () => {
-    renderWithProviders(<ZoneSignedUrls zone={zone} />);
+  it('hides the rotate action until the zone has a secret', async () => {
+    mockApi([]);
+    renderWithClient(<ZoneSignedUrls zone={zone} />);
+    await vi.waitFor(() => expect(screen.getByRole('switch')).toBeEnabled());
     expect(screen.queryByRole('button', { name: /rotate/i })).not.toBeInTheDocument();
   });
 
-  it('rotates the secret only after the user confirms', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...zone, hasSigningSecret: true }), { status: 201 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+  it('rotates the secret only after the user confirms the warning', async () => {
+    const fetchMock = mockApi([
+      { method: 'POST', url: '/api/zones/zone-1/signing-secret/rotate', status: 201, body: { ...zone, hasSigningSecret: true } },
+    ]);
+    renderWithClient(<ZoneSignedUrls zone={{ ...zone, signedUrlsRequired: true, hasSigningSecret: true }} />);
 
-    renderWithProviders(<ZoneSignedUrls zone={{ ...zone, signedUrlsRequired: true, hasSigningSecret: true }} />);
-    const rotate = screen.getByRole('button', { name: /rotate signing secret/i });
+    await userEvent.click(await screen.findByRole('button', { name: 'Rotate signing secret' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(/stop working right away/i);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(apiCalls(fetchMock, 'POST')).toHaveLength(0);
 
-    await userEvent.click(rotate);
-    expect(fetchMock).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Rotate signing secret' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Rotate secret' }));
 
-    await userEvent.click(rotate);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(fetchMock).toHaveBeenCalledWith('/api/zones/zone-1/signing-secret/rotate', expect.objectContaining({ method: 'POST' }));
     expect(await screen.findByText(/previously shared links no longer work/i)).toBeInTheDocument();
+    expect(apiCalls(fetchMock, 'POST').map(([url]) => url)).toEqual(['/api/zones/zone-1/signing-secret/rotate']);
+  });
+
+  it('shows the setting to a viewer without letting them change it', async () => {
+    mockApi([], 'viewer');
+    renderWithClient(<ZoneSignedUrls zone={{ ...zone, hasSigningSecret: true }} />);
+
+    expect(await screen.findByText(/your role cannot rotate the secret/i)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /require signed urls/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /rotate/i })).not.toBeInTheDocument();
   });
 });

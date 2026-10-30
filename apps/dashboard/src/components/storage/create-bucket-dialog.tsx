@@ -29,7 +29,7 @@ export function CreateBucketDialog() {
 
     const parsed = createBucketSchema.safeParse({ name });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter a valid bucket name');
+      setError(parsed.error.issues[0]?.message ?? 'Enter a bucket name');
       return;
     }
 
@@ -50,14 +50,14 @@ export function CreateBucketDialog() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create a bucket</DialogTitle>
-          <DialogDescription>Choose a name for your new bucket.</DialogDescription>
+          <DialogDescription>Buckets hold your files. Choose a name you will recognize.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bucket-name">Name</Label>
             <Input id="bucket-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={createBucket.isPending}>
               {createBucket.isPending ? 'Creating…' : 'Create bucket'}

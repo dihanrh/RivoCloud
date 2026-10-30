@@ -21,7 +21,7 @@ export function CreateOrgForm() {
 
     const parsed = createOrgSchema.safeParse({ name });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter an organization name');
+      setError(parsed.error.issues[0]?.message ?? 'Enter an account name');
       return;
     }
 
@@ -29,7 +29,7 @@ export function CreateOrgForm() {
       await createOrg.mutateAsync(parsed.data);
       router.push('/dashboard');
     } catch (err) {
-      setError(errorMessage(err, 'Could not create organization'));
+      setError(errorMessage(err, 'Could not create the account. Try again.'));
     }
   }
 
@@ -38,12 +38,12 @@ export function CreateOrgForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="org-name">Organization name</Label>
+        <Label htmlFor="org-name">Account name</Label>
         <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} required />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create organization'}
+      {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
+      <Button type="submit" size="lg" disabled={submitting}>
+        {submitting ? 'Creating…' : 'Create account'}
       </Button>
     </form>
   );

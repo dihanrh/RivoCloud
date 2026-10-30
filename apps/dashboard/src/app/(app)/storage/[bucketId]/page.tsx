@@ -2,6 +2,8 @@
 
 import { use, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorBanner } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { ObjectBrowser } from '@/components/storage/object-browser';
 import { UploadButton } from '@/components/storage/upload-button';
 import { ShareLinkDialog } from '@/components/storage/share-link-dialog';
@@ -17,28 +19,31 @@ export default function BucketDetailPage({ params }: { params: Promise<{ bucketI
   const [shareKey, setShareKey] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{bucket?.name ?? 'Bucket'}</h1>
-        <UploadButton bucketId={bucketId} />
-      </div>
+    <>
+      <PageHeader
+        title={bucket?.name ?? 'Bucket'}
+        description={bucket ? `${bucket.region}, ${bucket.public ? 'public' : 'private'} bucket` : undefined}
+        crumbs={[{ label: 'Storage', href: '/storage' }, { label: bucket?.name ?? 'Bucket' }]}
+        actions={<UploadButton bucketId={bucketId} />}
+      />
       {isLoading && <Skeleton className="h-40 w-full" />}
-      {error && <p className="text-destructive">Failed to load objects.</p>}
+      {error && <ErrorBanner>Could not load the files in this bucket. Refresh the page to try again.</ErrorBanner>}
       {data && (
         <ObjectBrowser
           objects={data.objects}
+          emptyAction={<UploadButton bucketId={bucketId} />}
           onDelete={async (key) => {
             if (!window.confirm(`Delete "${key}"? This cannot be undone.`)) return;
             try {
               await deleteObject.mutateAsync(key);
             } catch {
-              window.alert('Failed to delete the file. Please try again.');
+              window.alert('Could not delete the file. Try again.');
             }
           }}
           onShare={setShareKey}
         />
       )}
       <ShareLinkDialog bucketId={bucketId} objectKey={shareKey} onOpenChange={(open) => !open && setShareKey(null)} />
-    </div>
+    </>
   );
 }

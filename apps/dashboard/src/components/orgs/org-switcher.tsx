@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { ChevronRight } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useOrgs } from '@/hooks/use-orgs';
 import { useSelectOrg } from '@/hooks/use-select-org';
 import { errorMessage } from '@/lib/http';
@@ -20,25 +21,37 @@ export function OrgSwitcher() {
       await selectOrg.mutateAsync(orgId);
       router.push('/dashboard');
     } catch (err) {
-      setError(errorMessage(err, 'Could not select organization'));
+      setError(errorMessage(err, 'Could not open that account. Try again.'));
     }
   }
 
-  if (isLoading) return <p className="text-muted-foreground">Loading organizations…</p>;
+  if (isLoading) return <Skeleton className="h-24 w-full" />;
+  if (!orgs || orgs.length === 0) {
+    return <EmptyState title="No accounts yet" description="Create an account to add websites and buckets." className="py-6" />;
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {orgs?.map((org) => (
-        <Card key={org.id}>
-          <CardContent className="flex items-center justify-between p-4">
-            <span className="font-medium">{org.name}</span>
-            <Button size="sm" onClick={() => pick(org.id)} disabled={selectOrg.isPending}>
-              Select
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+    <div className="flex flex-col gap-2">
+      {error && (
+        <p role="alert" className="text-[13px] text-destructive">
+          {error}
+        </p>
+      )}
+      <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius)] border border-border">
+        {orgs.map((org) => (
+          <li key={org.id}>
+            <button
+              type="button"
+              onClick={() => void pick(org.id)}
+              disabled={selectOrg.isPending}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13px] font-medium hover:bg-muted disabled:opacity-60"
+            >
+              <span className="truncate">{org.name}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

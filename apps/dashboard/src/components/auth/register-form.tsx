@@ -47,7 +47,7 @@ export function RegisterForm({ onSuccess }: { onSuccess: (result: LoginResult) =
       // The account was created successfully; only the immediate follow-up login failed.
       // Send the user to /login instead of showing a generic error that invites a
       // re-submit (which would now fail with "email already exists").
-      setError('Account created — please log in.');
+      setError('Account created. Log in to continue.');
       router.push('/login');
     } finally {
       setSubmitting(false);
@@ -68,8 +68,8 @@ export function RegisterForm({ onSuccess }: { onSuccess: (result: LoginResult) =
         <Label htmlFor="password">Password</Label>
         <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={submitting}>
+      {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
+      <Button type="submit" size="lg" disabled={submitting}>
         {submitting ? 'Creating account…' : 'Create account'}
       </Button>
     </form>

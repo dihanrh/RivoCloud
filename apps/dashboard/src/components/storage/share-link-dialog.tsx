@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useZones } from '@/hooks/use-zones';
@@ -16,8 +16,6 @@ const EXPIRY_OPTIONS = [
   { label: '1 day', seconds: 24 * 60 * 60 },
   { label: '7 days', seconds: 7 * 24 * 60 * 60 },
 ];
-
-const SELECT_CLASS = 'h-9 rounded-md border border-input bg-transparent px-3 text-sm';
 
 export function ShareLinkDialog({
   bucketId,
@@ -59,7 +57,7 @@ export function ShareLinkDialog({
     try {
       setResult(await signObject.mutateAsync({ key: objectKey, zoneId: selectedZoneId, expiresIn, download }));
     } catch (err) {
-      setError(errorMessage(err, 'Could not create a share link'));
+      setError(errorMessage(err, 'Could not create the share link. Try again.'));
     }
   }
 
@@ -85,25 +83,24 @@ export function ShareLinkDialog({
         </DialogHeader>
         {!zonesLoading && signingZones.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No zone requires signed URLs yet. Turn on &quot;Require signed URLs&quot; on a zone that serves this bucket first.
+            No website requires signed URLs yet. Turn on &quot;Require signed URLs&quot; for a website that serves this bucket first.
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="share-zone">Zone</Label>
-              <select id="share-zone" className={SELECT_CLASS} value={selectedZoneId} onChange={(e) => setZoneId(e.target.value)}>
+              <Label htmlFor="share-zone">Website</Label>
+              <Select id="share-zone" value={selectedZoneId} onChange={(e) => setZoneId(e.target.value)}>
                 {signingZones.map((zone) => (
                   <option key={zone.id} value={zone.id}>
                     {zone.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="share-expiry">Expires after</Label>
-              <select
+              <Select
                 id="share-expiry"
-                className={SELECT_CLASS}
                 value={expiresIn}
                 onChange={(e) => setExpiresIn(Number(e.target.value))}
               >
@@ -112,7 +109,7 @@ export function ShareLinkDialog({
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={download} onChange={(e) => setDownload(e.target.checked)} />
@@ -130,7 +127,7 @@ export function ShareLinkDialog({
                 <p className="text-xs text-muted-foreground">Expires {new Date(result.expiresAt).toLocaleString()}</p>
               </div>
             )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
             <DialogFooter>
               <Button type="submit" disabled={signObject.isPending || !selectedZoneId}>
                 {signObject.isPending ? 'Creating…' : result ? 'Create new link' : 'Create link'}

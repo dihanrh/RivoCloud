@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { EmptyState, ErrorBanner } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,7 +46,7 @@ function CreateKeyDialog({ role }: { role: OrgRole }) {
     try {
       setCreated(await createKey.mutateAsync({ name, permissions: selected }));
     } catch (err) {
-      setError(errorMessage(err, 'Could not create the key'));
+      setError(errorMessage(err, 'Could not create the key. Try again.'));
     }
   }
 
@@ -74,7 +77,7 @@ function CreateKeyDialog({ role }: { role: OrgRole }) {
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
-              {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+              {error && <p role="alert" className="mt-2 text-[13px] text-destructive">{error}</p>}
               <DialogFooter>
                 <Button type="button" onClick={() => handleOpenChange(false)}>
                   Done
@@ -92,7 +95,7 @@ function CreateKeyDialog({ role }: { role: OrgRole }) {
                 <Input id="key-name" required value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm font-medium">Scopes</legend>
+                <legend className="mb-1 text-[13px] font-medium">Scopes</legend>
                 {scopesAllowedForRole(role).map((scope) => (
                   <label key={scope} className="flex items-center gap-2 text-sm">
                     <input
@@ -105,7 +108,7 @@ function CreateKeyDialog({ role }: { role: OrgRole }) {
                   </label>
                 ))}
               </fieldset>
-              {error && <p className="text-sm text-destructive">{error}</p>}
+              {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
               <DialogFooter>
                 <Button type="submit" disabled={createKey.isPending || selected.length === 0}>
                   {createKey.isPending ? 'Creating…' : 'Create'}
@@ -130,7 +133,7 @@ export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string
     try {
       await revoke.mutateAsync(keyId);
     } catch (err) {
-      setMessage(errorMessage(err, 'Could not revoke the key'));
+      setMessage(errorMessage(err, 'Could not revoke the key. Try again.'));
     } finally {
       setConfirmingId(null);
     }
@@ -145,11 +148,20 @@ export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string
       <div className="flex justify-end">
         <CreateKeyDialog role={orgRole} />
       </div>
-      {message && <p className="text-sm text-destructive">{message}</p>}
+      {message && <ErrorBanner>{message}</ErrorBanner>}
       {isLoading && <Skeleton className="h-32 w-full" />}
-      {error && <p className="text-destructive">Failed to load API keys.</p>}
-      {keys && keys.length === 0 && <p className="text-sm text-muted-foreground">No API keys yet.</p>}
+      {error && <ErrorBanner>Could not load API keys. Refresh the page to try again.</ErrorBanner>}
+      {keys && keys.length === 0 && (
+        <Card>
+          <EmptyState
+            icon={KeyRound}
+            title="No API keys yet"
+            description="Create a key to call the RivoCloud API from scripts and CI."
+          />
+        </Card>
+      )}
       {keys && keys.length > 0 && (
+        <Card>
         <Table>
           <TableHeader>
             <TableRow>
@@ -157,17 +169,19 @@ export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string
               <TableHead>Key</TableHead>
               <TableHead>Scopes</TableHead>
               <TableHead>Last used</TableHead>
-              <TableHead />
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {keys.map((key) => (
               <TableRow key={key.id}>
-                <TableCell>{key.name}</TableCell>
-                <TableCell className="font-mono">{key.keyPrefix}…</TableCell>
+                <TableCell className="font-medium">{key.name}</TableCell>
+                <TableCell className="font-mono text-xs">{key.keyPrefix}…</TableCell>
                 <TableCell>{key.permissions.join(', ')}</TableCell>
-                <TableCell>{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : 'Never'}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-muted-foreground">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : 'Never'}</TableCell>
+                <TableCell className="whitespace-nowrap text-right">
                   {!canRevokeAny && key.userId !== meId ? null : confirmingId === key.id ? (
                     <span className="inline-flex gap-2">
                       <Button
@@ -197,6 +211,7 @@ export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string
             ))}
           </TableBody>
         </Table>
+        </Card>
       )}
     </div>
   );

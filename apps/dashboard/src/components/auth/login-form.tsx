@@ -37,7 +37,7 @@ export function LoginForm({ onSuccess }: { onSuccess: (result: LoginResult) => v
       });
       onSuccess(result);
     } catch (err) {
-      setError(errorMessage(err, 'Login failed'));
+      setError(errorMessage(err, 'Could not log in. Check your email and password and try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -53,8 +53,8 @@ export function LoginForm({ onSuccess }: { onSuccess: (result: LoginResult) => v
         <Label htmlFor="password">Password</Label>
         <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={submitting}>
+      {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
+      <Button type="submit" size="lg" disabled={submitting}>
         {submitting ? 'Logging in…' : 'Log in'}
       </Button>
     </form>

@@ -18,7 +18,7 @@ export function UploadButton({ bucketId }: { bucketId: string }) {
     try {
       await initiateUpload.mutateAsync(file);
     } catch {
-      setError('Upload failed. Please try again.');
+      setError('Could not upload the file. Try again.');
     }
   }
 
@@ -28,7 +28,7 @@ export function UploadButton({ bucketId }: { bucketId: string }) {
       <Button onClick={() => inputRef.current?.click()} disabled={initiateUpload.isPending}>
         {initiateUpload.isPending ? 'Uploading…' : 'Upload file'}
       </Button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-[13px] text-destructive">{error}</p>}
     </div>
   );
 }

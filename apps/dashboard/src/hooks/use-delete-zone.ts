@@ -8,7 +8,8 @@ export function useDeleteZone(zoneId: string) {
   return useMutation({
     mutationFn: () => apiFetch<{ success: true }>(`/api/zones/${zoneId}`, { method: 'DELETE' }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['zones'] });
+      // Refresh the list only; refetching the deleted website would just 404.
+      void queryClient.invalidateQueries({ queryKey: ['zones'], exact: true });
     },
   });
 }
