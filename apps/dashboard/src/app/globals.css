@@ -1,19 +1,73 @@
 @import "tailwindcss";
 
+/*
+ * RivoCloud console tokens. A dense operations console: a light grey canvas,
+ * white panels, one action blue. The brand gradient (from the logo)
+ * appears only on the logo, the active-nav marker, and the sign-in backdrop.
+ */
 @theme {
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.205 0 0);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
-  --color-border: oklch(0.922 0 0);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(0.985 0 0);
-  --radius: 0.5rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --color-canvas: #f2f3f5;
+  --color-background: #ffffff;
+  --color-foreground: #1d2025;
+  --color-muted: #f6f7f9;
+  --color-muted-foreground: #5e6670;
+  --color-border: #d9dce1;
+  --color-border-strong: #b9bec6;
+
+  --color-primary: #0051c3;
+  --color-primary-hover: #003f99;
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: #e8f0fc;
+
+  --color-success: #1e7d3a;
+  --color-success-soft: #e6f4ea;
+  --color-warning: #9a5b00;
+  --color-warning-soft: #fdf3e1;
+  --color-destructive: #c4291c;
+  --color-destructive-hover: #a11f14;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-soft: #fcebea;
+
+  --color-brand-orange: #f7931e;
+  --color-brand-pink: #e8336d;
+  --color-brand-purple: #5b2a8c;
+
+  --radius: 0.375rem;
+}
+
+:root {
+  --brand-gradient: linear-gradient(135deg, var(--color-brand-orange), var(--color-brand-pink) 55%, var(--color-brand-purple));
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--color-background);
+  background: var(--color-canvas);
   color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
