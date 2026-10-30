@@ -21,10 +21,10 @@ const DASHBOARD = env.DASHBOARD_URL || 'http://localhost:3000';
 const PASSWORD = 'DemoPass123!';
 const ORG_NAME = 'Acme Media';
 const USERS = [
-  { email: 'owner@demo.rivo', name: 'Ava Owner', role: 'owner' },
-  { email: 'admin@demo.rivo', name: 'Sam Admin', role: 'admin' },
-  { email: 'dev@demo.rivo', name: 'Dev Patel', role: 'developer' },
-  { email: 'viewer@demo.rivo', name: 'Vic Viewer', role: 'viewer' },
+  { email: 'owner@demo.rivo', name: 'Demo Owner', role: 'owner' },
+  { email: 'admin@demo.rivo', name: 'Demo Admin', role: 'admin' },
+  { email: 'dev@demo.rivo', name: 'Demo Developer', role: 'developer' },
+  { email: 'viewer@demo.rivo', name: 'Demo Viewer', role: 'viewer' },
 ];
 const INGEST_BATCH = 300; // keeps each request body well under Nest's default 100kb JSON limit
 const DAYS = 7;
@@ -81,6 +81,12 @@ async function ensureUser(u) {
     log(`user exists: ${u.email}`);
   }
   const { data } = await http('POST', `${IDENTITY}/api/v1/auth/login`, { body: { email: u.email, password: PASSWORD } });
+  // Keep display names in step with this file when reusing an existing account.
+  const me = await http('GET', `${IDENTITY}/api/v1/users/me`, { token: data.accessToken });
+  if (me.data?.name !== u.name) {
+    await http('PATCH', `${IDENTITY}/api/v1/users/me`, { token: data.accessToken, body: { name: u.name } });
+    log(`renamed ${u.email} to ${u.name}`);
+  }
   return data.accessToken;
 }
 

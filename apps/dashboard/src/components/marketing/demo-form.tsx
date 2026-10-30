@@ -98,7 +98,7 @@ export function DemoForm({ compact = false }: { compact?: boolean }) {
   return (
     <form noValidate onSubmit={onSubmit} aria-label="Request a demo" className="grid gap-4">
       <div className={cn('grid gap-4', !compact && 'sm:grid-cols-2')}>
-        {field('name', 'Full name', { autoComplete: 'name', placeholder: 'Maya Rahman' })}
+        {field('name', 'Full name', { autoComplete: 'name', placeholder: 'Jane Doe' })}
         {field('email', 'Work email', { type: 'email', autoComplete: 'email', placeholder: 'maya@company.com' })}
       </div>
       <div className={cn('grid gap-4', !compact && 'sm:grid-cols-2')}>

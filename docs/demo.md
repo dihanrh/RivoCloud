@@ -29,12 +29,14 @@ If `DATABASE_URL` points at port 5433 (for a machine that already has a native P
 
 All passwords: `DemoPass123!`. Organization: **Acme Media**.
 
+The script exports `NEXT_PUBLIC_DEMO_MODE=true` for the dashboard, so the login page shows a "Demo accounts" panel under the form: click an account to fill in its email and password, then press Log in. Without that variable (any normal run) the panel is not rendered.
+
 | Account | Role | What they see |
 | --- | --- | --- |
-| `owner@demo.rivo` (Ava Owner) | owner | Everything, including members, API keys, audit log, deleting resources |
-| `admin@demo.rivo` (Sam Admin) | admin | Everything except owner-only actions (e.g. deleting the org) |
-| `dev@demo.rivo` (Dev Patel) | developer | Websites, caching, storage, analytics; no member management |
-| `viewer@demo.rivo` (Vic Viewer) | viewer | Read-only: can browse but write actions are rejected |
+| `owner@demo.rivo` (Demo Owner) | owner | Everything, including members, API keys, audit log, deleting resources |
+| `admin@demo.rivo` (Demo Admin) | admin | Everything except owner-only actions (e.g. deleting the org) |
+| `dev@demo.rivo` (Demo Developer) | developer | Websites, caching, storage, analytics; no member management |
+| `viewer@demo.rivo` (Demo Viewer) | viewer | Read-only: can browse but write actions are rejected |
 
 Seeded data: websites `acme-shop` (cache rules, a custom domain waiting for DNS), `acme-blog` (paused, with a purge-everything in its history) and `media-assets` (signed URLs required); buckets `product-images` (public) and `invoices` (private) with a few ready objects; an API key "CI deploy" (zone:read, cache:invalidate); and about 46,000 synthetic edge requests spread over the last 7 days (diurnal curve, cache HIT/MISS/BYPASS, seven countries, a few 304/404/5xx).
 

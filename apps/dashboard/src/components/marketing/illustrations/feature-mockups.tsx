@@ -425,7 +425,7 @@ export function TeamsMockup() {
         <div className="rounded-lg border border-border p-3">
           <p className="text-[12px] font-medium text-foreground">Audit log</p>
           <ul className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-            <li><span className="text-foreground">Maya R.</span> purged /blog/* · 2m</li>
+            <li><span className="text-foreground">Jane D.</span> purged /blog/* · 2m</li>
             <li><span className="text-foreground">CI key</span> updated a cache rule · 1h</li>
             <li><span className="text-foreground">Tom B.</span> invited a viewer · 3h</li>
           </ul>

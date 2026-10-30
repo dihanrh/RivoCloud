@@ -17,7 +17,7 @@ describe('DemoForm', () => {
   it('rejects an invalid email, then shows a success state', async () => {
     const user = userEvent.setup();
     render(<DemoForm />);
-    await user.type(screen.getByLabelText('Full name'), 'Maya Rahman');
+    await user.type(screen.getByLabelText('Full name'), 'Jane Doe');
     await user.type(screen.getByLabelText('Work email'), 'maya@northwind');
     await user.type(screen.getByLabelText('Company'), 'Northwind Shop');
     await user.click(screen.getByRole('button', { name: 'Request a demo' }));
@@ -32,7 +32,7 @@ describe('DemoForm', () => {
     await user.click(screen.getByRole('button', { name: 'Request a demo' }));
 
     const status = screen.getByRole('status');
-    expect(status).toHaveTextContent('Thanks, Maya.');
+    expect(status).toHaveTextContent('Thanks, Jane.');
     expect(status).toHaveTextContent('maya@northwind.com');
   });
 

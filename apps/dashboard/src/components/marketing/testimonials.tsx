@@ -4,25 +4,25 @@ const QUOTES = [
   {
     quote:
       'Our product pages used to fall over every time we ran a sale. Now 95% of requests never reach our servers, and when prices change we purge one path from the admin and it is live everywhere before the page reloads.',
-    name: 'Maya Rahman',
+    name: 'Jane Doe',
     role: 'Head of engineering, Northwind Shop',
-    initials: 'MR',
+    initials: 'JD',
     color: '#f7931e',
   },
   {
     quote:
       'We moved 30 TB of images and video into RivoCloud buckets in a weekend. Cache tags mean an editor’s correction is visible in seconds, not after a TTL runs out.',
-    name: 'Daniel Okafor',
+    name: 'John Smith',
     role: 'Platform lead, Acme Media',
-    initials: 'DO',
+    initials: 'JS',
     color: '#e8336d',
   },
   {
     quote:
       'Presigned uploads and signed links replaced a file service we had been maintaining for three years. Our CI key can purge the cache and nothing else, which our security team loves.',
-    name: 'Sofia Lindqvist',
+    name: 'Alex Johnson',
     role: 'CTO, Lumen Labs',
-    initials: 'SL',
+    initials: 'AJ',
     color: '#5b2a8c',
   },
 ];
