@@ -77,3 +77,53 @@
     }
   }
 }
+
+/*
+ * Console motion. Quick and quiet: 150-200 ms ease-out for overlays, menus,
+ * tooltips and toasts. Radix primitives expose data-state / data-side, which
+ * these classes key off. The reduced-motion rule above collapses all of it.
+ */
+@keyframes rc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rc-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes rc-pop-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes rc-pop-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.96); } }
+@keyframes rc-slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes rc-slide-out-right { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes rc-slide-in-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes rc-slide-out-left { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+@keyframes rc-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes rc-menu-in-up { from { opacity: 0; transform: translateY(4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes rc-toast-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes rc-toast-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(16px); } }
+@keyframes rc-progress-indeterminate { 0% { transform: translateX(-100%) scaleX(0.4); } 100% { transform: translateX(250%) scaleX(0.4); } }
+
+@layer components {
+  .rc-overlay[data-state='open'] { animation: rc-fade-in 180ms ease-out; }
+  .rc-overlay[data-state='closed'] { animation: rc-fade-out 150ms ease-in; }
+
+  .rc-pop[data-state='open'] { animation: rc-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .rc-pop[data-state='closed'] { animation: rc-pop-out 150ms ease-in; }
+
+  .rc-sheet-right[data-state='open'] { animation: rc-slide-in-right 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .rc-sheet-right[data-state='closed'] { animation: rc-slide-out-right 160ms ease-in; }
+  .rc-sheet-left[data-state='open'] { animation: rc-slide-in-left 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .rc-sheet-left[data-state='closed'] { animation: rc-slide-out-left 160ms ease-in; }
+
+  .rc-menu[data-state='open'] { animation: rc-menu-in 150ms ease-out; }
+  .rc-menu[data-state='open'][data-side='top'] { animation-name: rc-menu-in-up; }
+  .rc-menu[data-state='closed'] { animation: rc-fade-out 120ms ease-in; }
+
+  .rc-tooltip[data-state='delayed-open'],
+  .rc-tooltip[data-state='instant-open'] { animation: rc-fade-in 150ms ease-out; }
+  .rc-tooltip[data-state='closed'] { animation: rc-fade-out 100ms ease-in; }
+
+  .rc-toast[data-state='open'] { animation: rc-toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .rc-toast[data-state='closed'] { animation: rc-toast-out 160ms ease-in forwards; }
+
+  /* The thin route-transition bar under the top bar (see layout/route-progress). */
+  .rc-route-progress {
+    background: var(--brand-gradient);
+    transform-origin: left;
+    transition: transform 200ms ease-out, opacity 300ms ease-out;
+  }
+}

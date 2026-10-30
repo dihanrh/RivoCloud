@@ -1,3 +1,9 @@
+/**
+ * Card (panel) + SettingRow.
+ *   import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, SettingRow } from '@/components/ui/card';
+ *   <SettingRow title="Always use HTTPS" description="Redirect HTTP to HTTPS."><Switch … /></SettingRow>
+ * SettingRow: title, description, children (the control, right-aligned on desktop), className.
+ */
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 

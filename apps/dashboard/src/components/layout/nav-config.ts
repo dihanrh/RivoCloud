@@ -1,3 +1,7 @@
+/**
+ * Console navigation model, shared by the sidebar, the mobile drawer and the command palette.
+ * ACCOUNT_NAV = account-level sections; zoneNav(id) = the website (zone) context sections.
+ */
 import {
   BarChart3,
   Database,

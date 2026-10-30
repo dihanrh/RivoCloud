@@ -1,3 +1,10 @@
+/**
+ * PageHeader + SectionTitle — the top of every console page.
+ *   import { PageHeader, SectionTitle, type Crumb } from '@/components/ui/page-header';
+ *   <PageHeader title="Websites" description="…" crumbs={[{ label: 'Account home', href: '/dashboard' }, { label: 'Websites' }]}
+ *               actions={<Button leftIcon={<Plus />}>Add a website</Button>} />
+ *   <SectionTitle actions={…}>Cache rules</SectionTitle>
+ */
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';

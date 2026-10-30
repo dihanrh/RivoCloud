@@ -1,5 +1,9 @@
 'use client';
 
+/**
+ * Label (Radix). Prefer <Field label=…>, which renders and wires this for you.
+ *   import { Label } from '@/components/ui/label';
+ */
 import * as React from 'react';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { cn } from '@/lib/utils';

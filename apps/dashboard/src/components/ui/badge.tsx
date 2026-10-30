@@ -1,3 +1,9 @@
+/**
+ * Badge + StatusDot.
+ *   import { Badge, StatusDot } from '@/components/ui/badge';
+ *   <Badge variant="success">Active</Badge>   // default | secondary | success | warning | destructive | outline
+ *   <StatusDot tone="success">Live</StatusDot> // success | warning | destructive | muted
+ */
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';

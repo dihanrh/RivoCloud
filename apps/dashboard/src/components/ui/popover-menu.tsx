@@ -4,6 +4,9 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 /**
+ * @deprecated Use `DropdownMenu` from '@/components/ui/dropdown-menu' (full keyboard support,
+ * animation, collision-aware positioning). Kept only so nothing breaks; no console code uses it.
+ *
  * A small click-to-open menu (account switcher, user menu). Closes on outside
  * click, Escape, or when an item calls `close`.
  */

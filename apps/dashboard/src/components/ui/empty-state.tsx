@@ -1,3 +1,9 @@
+/**
+ * EmptyState + ErrorBanner.
+ *   import { EmptyState, ErrorBanner } from '@/components/ui/empty-state';
+ *   <EmptyState icon={Globe} title="No websites yet" description="…" action={<Button>Add a website</Button>} />
+ *   <ErrorBanner>Could not load members.</ErrorBanner>   // role="alert"
+ */
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
