@@ -12,3 +12,5 @@ coverage/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+# demo stack runtime state (scripts/demo.sh)
+.demo/
