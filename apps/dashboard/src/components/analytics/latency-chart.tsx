@@ -4,7 +4,10 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { useAnalyticsLatency } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AXIS_TICK, CHART_COLORS, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
+import { AXIS_TICK, CHART_COLORS, SERIES_ANIMATION, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
+
+// Quantiles come back as raw floats (e.g. 224.40000000000003).
+const msLabel = (v: number) => `${Math.round(v)} ms`;
 
 export function LatencyChart({ params }: { params: AnalyticsQueryParams }) {
   const { data, isLoading } = useAnalyticsLatency(params);
@@ -22,12 +25,12 @@ export function LatencyChart({ params }: { params: AnalyticsQueryParams }) {
             tickFormatter={formatBucketTime}
             minTickGap={48}
           />
-          <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={52} tickFormatter={(v: number) => `${v} ms`} />
-          <Tooltip {...TOOLTIP_STYLE} labelFormatter={formatBucketTime} formatter={(v: number) => `${v} ms`} />
+          <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={52} tickFormatter={msLabel} />
+          <Tooltip {...TOOLTIP_STYLE} labelFormatter={formatBucketTime} formatter={msLabel} />
           <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
-          <Line type="monotone" dataKey="p50" name="p50" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="p95" name="p95" stroke={CHART_COLORS.orange} strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="p99" name="p99" stroke={CHART_COLORS.purple} strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="p50" name="p50" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />
+          <Line type="monotone" dataKey="p95" name="p95" stroke={CHART_COLORS.orange} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />
+          <Line type="monotone" dataKey="p99" name="p99" stroke={CHART_COLORS.purple} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />
         </LineChart>
       </ResponsiveContainer>
     </div>

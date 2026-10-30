@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatBytes } from '@/lib/format-bytes';
 import type { StorageObject } from '@/lib/types';
 
-const STATUS_VARIANT: Record<StorageObject['status'], 'success' | 'secondary' | 'destructive'> = {
-  ready: 'success',
-  pending: 'secondary',
-  deleted: 'destructive',
+// A pending object has been issued an upload URL but storage hasn't confirmed the file landed yet.
+const STATUS_BADGE: Record<StorageObject['status'], { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
+  ready: { label: 'Ready', variant: 'success' },
+  pending: { label: 'Uploading', variant: 'warning' },
+  deleted: { label: 'Deleted', variant: 'destructive' },
 };
 
 export function ObjectBrowser({
@@ -59,7 +60,7 @@ export function ObjectBrowser({
               <TableCell className="whitespace-nowrap tabular-nums">{formatBytes(object.size)}</TableCell>
               <TableCell className="text-muted-foreground">{object.contentType}</TableCell>
               <TableCell>
-                <Badge variant={STATUS_VARIANT[object.status]}>{object.status}</Badge>
+                <Badge variant={STATUS_BADGE[object.status].variant}>{STATUS_BADGE[object.status].label}</Badge>
               </TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {new Date(object.createdAt).toLocaleDateString()}

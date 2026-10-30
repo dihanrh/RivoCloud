@@ -2,8 +2,9 @@
 
 /*
  * RivoCloud console tokens. A dense operations console: a light grey canvas,
- * white panels, one action blue. The brand gradient (from the logo)
- * appears only on the logo, the active-nav marker, and the sign-in backdrop.
+ * white panels, one action colour taken from the logo. The full brand
+ * gradient appears on the logo, the active-nav marker, the sign-in backdrop,
+ * and the marketing site's hero.
  */
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -17,10 +18,11 @@
   --color-border: #d9dce1;
   --color-border-strong: #b9bec6;
 
-  --color-primary: #0051c3;
-  --color-primary-hover: #003f99;
+  /* Action colour = the logo's pink-red, deepened so white text passes WCAG AA (4.9:1). */
+  --color-primary: #d6246a;
+  --color-primary-hover: #b51b58;
   --color-primary-foreground: #ffffff;
-  --color-primary-soft: #e8f0fc;
+  --color-primary-soft: #fde8f0;
 
   --color-success: #1e7d3a;
   --color-success-soft: #e6f4ea;
@@ -42,32 +44,36 @@
   --brand-gradient: linear-gradient(135deg, var(--color-brand-orange), var(--color-brand-pink) 55%, var(--color-brand-purple));
 }
 
-html {
-  -webkit-font-smoothing: antialiased;
-}
+/* Base styles live in the base layer so Tailwind utilities (text-primary on a
+   link, text-primary-foreground on a link-button) always win over them. */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
 
-body {
-  background: var(--color-canvas);
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
-}
+  body {
+    background: var(--color-canvas);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
 
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 
-a {
-  color: inherit;
-}
+  a {
+    color: inherit;
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

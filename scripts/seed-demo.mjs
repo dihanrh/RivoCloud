@@ -426,6 +426,19 @@ function generateEvents(zone, orgId, seed) {
   return events;
 }
 
+/** Runs one statement over ClickHouse's HTTP interface; `params` bind to {name:Type} placeholders. */
+async function clickhouse(sql, params = {}) {
+  const url = new URL(CLICKHOUSE);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(`param_${k}`, String(v));
+  const headers = {};
+  if (env.CLICKHOUSE_USER) headers['x-clickhouse-user'] = env.CLICKHOUSE_USER;
+  if (env.CLICKHOUSE_PASSWORD) headers['x-clickhouse-key'] = env.CLICKHOUSE_PASSWORD;
+  const res = await fetch(url, { method: 'POST', headers, body: sql });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`ClickHouse ${res.status}: ${text.trim()}`);
+  return text;
+}
+
 async function clickhouseCount(zoneId) {
   try {
     const q = encodeURIComponent(`SELECT count() FROM request_logs WHERE zone_id = '${zoneId}'`);
@@ -456,8 +469,117 @@ async function seedTraffic(zones, orgId) {
     }
     total += events.length;
     log(`ingested ${events.length} edge events for ${zone.name}`);
+    await waitForFlush(zone, (existing ?? 0) + events.length);
   }
   return total;
+}
+
+/**
+ * analytics-service buffers ingested events in memory (flushed every <= 5s). The rollup backfill
+ * must only run once they are in request_logs, or the rolled-up windows would miss them for good.
+ */
+async function waitForFlush(zone, expected) {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    const n = await clickhouseCount(zone.id);
+    if (n === null || n >= expected) return;
+    if (Date.now() > deadline) throw new Error(`request_logs for ${zone.name} has ${n}/${expected} rows after 60s`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+// ---------- analytics rollups ----------
+//
+// The bandwidth chart reads bandwidth_hourly and "Requests by country" reads
+// requests_by_country_daily. Only the scheduler fills them (apps/scheduler/src/analytics/
+// rollup.cron.ts: hourly at :05 for the previous hour, daily at 01:00 process-local time for the
+// previous UTC day), so freshly seeded history would never appear there. Backfill them here with the
+// same SQL shape as rollup.service.ts.
+//
+// Both tables are SummingMergeTree: rolling a window up twice DOUBLES it. So each window is rolled up
+// exactly once: only windows with no existing row for that zone, and never a window the scheduler is
+// still going to roll up itself. Re-running the seed therefore inserts nothing.
+
+const HOUR_MS = 3600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** Exclusive upper bound (unix seconds) for the hourly backfill. */
+function bandwidthCutoff(now) {
+  let cutoff = Math.floor(now.getTime() / HOUR_MS) * HOUR_MS; // start of the current UTC hour
+  // Before :06 the scheduler's :05 run may not have rolled up the previous hour yet; it owns it.
+  if (now.getUTCMinutes() < 6) cutoff -= HOUR_MS;
+  return cutoff / 1000;
+}
+
+/** Exclusive upper bound (unix seconds) for the daily backfill. */
+function countryCutoff(now) {
+  let cutoff = Math.floor(now.getTime() / DAY_MS) * DAY_MS; // UTC midnight today
+  // The daily cron fires at 01:00 process-local time and rolls up the UTC day before its fire time.
+  // If its next run (or one firing right now) still lands on today's UTC date, yesterday is its job.
+  const nextFire = new Date(now.getTime() - 5 * 60_000);
+  nextFire.setHours(1, 0, 0, 0);
+  if (nextFire.getTime() < now.getTime() - 5 * 60_000) nextFire.setDate(nextFire.getDate() + 1);
+  if (Math.floor(nextFire.getTime() / DAY_MS) * DAY_MS === cutoff) cutoff -= DAY_MS;
+  return cutoff / 1000;
+}
+
+async function rollupCounts(zoneId) {
+  const out = await clickhouse(
+    `SELECT
+       (SELECT count() FROM bandwidth_hourly WHERE zone_id = {zone:String}),
+       (SELECT sum(requests) FROM bandwidth_hourly WHERE zone_id = {zone:String}),
+       (SELECT uniqExact(date) FROM requests_by_country_daily WHERE zone_id = {zone:String})
+     FORMAT TSV`,
+    { zone: zoneId },
+  );
+  const [hours, requests, days] = out.trim().split('\t').map(Number);
+  return { hours, requests, days };
+}
+
+async function backfillRollups(zones) {
+  const now = new Date();
+  const hourCutoff = bandwidthCutoff(now);
+  const dayCutoff = countryCutoff(now);
+  for (const zone of Object.values(zones)) {
+    const before = await rollupCounts(zone.id);
+    await clickhouse(
+      `INSERT INTO bandwidth_hourly (hour, zone_id, org_id, bytes_sent, requests, cache_hits, cache_misses)
+       SELECT
+         toDateTime(toStartOfHour(timestamp), 'UTC') AS hour,
+         zone_id,
+         org_id,
+         sum(bytes_sent) AS bytes_sent,
+         count() AS requests,
+         countIf(cache_status = 'HIT') AS cache_hits,
+         countIf(cache_status != 'HIT') AS cache_misses
+       FROM request_logs
+       WHERE zone_id = {zone:String}
+         AND timestamp < toDateTime({cutoff:UInt32}, 'UTC')
+         AND toDateTime(toStartOfHour(timestamp), 'UTC') NOT IN (SELECT hour FROM bandwidth_hourly WHERE zone_id = {zone:String})
+       GROUP BY hour, zone_id, org_id`,
+      { zone: zone.id, cutoff: hourCutoff },
+    );
+    await clickhouse(
+      `INSERT INTO requests_by_country_daily (date, zone_id, country, requests, bytes_sent)
+       SELECT
+         toDate(timestamp, 'UTC') AS date,
+         zone_id,
+         country,
+         count() AS requests,
+         sum(bytes_sent) AS bytes_sent
+       FROM request_logs
+       WHERE zone_id = {zone:String}
+         AND timestamp < toDateTime({cutoff:UInt32}, 'UTC')
+         AND toDate(timestamp, 'UTC') NOT IN (SELECT date FROM requests_by_country_daily WHERE zone_id = {zone:String})
+       GROUP BY date, zone_id, country`,
+      { zone: zone.id, cutoff: dayCutoff },
+    );
+    const after = await rollupCounts(zone.id);
+    log(
+      `${zone.name}: +${after.hours - before.hours} hour(s) in bandwidth_hourly (${after.hours} hours, ` +
+        `${after.requests} requests), +${after.days - before.days} day(s) in requests_by_country_daily (${after.days} days)`,
+    );
+  }
 }
 
 // ---------- main ----------
@@ -482,6 +604,8 @@ async function main() {
 
   log('analytics: synthetic traffic');
   const events = await seedTraffic(zones, org.id);
+  log('analytics: rollup backfill');
+  await backfillRollups(zones);
 
   console.log('\n================ Demo seed summary ================');
   console.log(`Org:       ${ORG_NAME} (${org.id})`);

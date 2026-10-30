@@ -49,7 +49,7 @@ function WebsitesPanel() {
         <CardTitle>Websites</CardTitle>
         <div className="flex items-center gap-2">
           {zones.length > 0 && (
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="link" size="sm">
               <Link href="/zones">View all</Link>
             </Button>
           )}
@@ -133,7 +133,7 @@ function TrafficPanel() {
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
         <CardTitle>Traffic, last 24 hours</CardTitle>
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="link" size="sm">
           <Link href="/analytics">Analytics</Link>
         </Button>
       </CardHeader>
@@ -158,7 +158,7 @@ function StoragePanel() {
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
         <CardTitle>Storage</CardTitle>
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="link" size="sm">
           <Link href="/storage">Open storage</Link>
         </Button>
       </CardHeader>
@@ -182,7 +182,7 @@ function TeamPanel({ orgId }: { orgId: string }) {
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
         <CardTitle>Team</CardTitle>
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="link" size="sm">
           <Link href="/settings/members">Members</Link>
         </Button>
       </CardHeader>

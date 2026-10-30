@@ -41,7 +41,14 @@ describe('ObjectBrowser', () => {
     expect(screen.getByText('photo.png')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
     expect(screen.getByText('draft.txt')).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
+    expect(screen.getByText('Ready')).toHaveClass('text-success');
+    expect(screen.getByText('Uploading')).toHaveClass('text-warning');
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
+  });
+
+  it('labels deleted objects in sentence case with a destructive tone', () => {
+    render(<ObjectBrowser objects={[makeObject({ status: 'deleted' })]} onDelete={vi.fn()} />);
+    expect(screen.getByText('Deleted')).toHaveClass('text-destructive');
   });
 
   it('offers a share link only for ready objects, and only when sharing is wired up', async () => {

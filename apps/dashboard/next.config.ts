@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  // Keep the dev-mode badge out of demos and screenshots.
+  devIndicators: false,
+};
 
 export default nextConfig;

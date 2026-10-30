@@ -5,7 +5,7 @@ import { useAnalyticsBandwidth } from '@/hooks/use-analytics';
 import { formatBytes } from '@/lib/format-bytes';
 import type { AnalyticsQueryParams } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AXIS_TICK, CHART_COLORS, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
+import { AXIS_TICK, CHART_COLORS, SERIES_ANIMATION, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
 
 const bytesLabel = (v: number) => formatBytes(String(Math.round(v)));
 
@@ -34,6 +34,7 @@ export function BandwidthChart({ params }: { params: AnalyticsQueryParams }) {
             strokeWidth={2}
             fill={CHART_COLORS.primary}
             fillOpacity={0.12}
+            {...SERIES_ANIMATION}
           />
         </AreaChart>
       </ResponsiveContainer>

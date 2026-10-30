@@ -4,7 +4,7 @@ import { RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts';
 import { useAnalyticsCache } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CHART_COLORS } from './chart-theme';
+import { CHART_COLORS, SERIES_ANIMATION } from './chart-theme';
 
 export function CacheRatioGauge({ params }: { params: AnalyticsQueryParams }) {
   const { data, isLoading } = useAnalyticsCache(params);
@@ -20,7 +20,7 @@ export function CacheRatioGauge({ params }: { params: AnalyticsQueryParams }) {
           startAngle={90}
           endAngle={-270}
         >
-          <RadialBar dataKey="value" background={{ fill: CHART_COLORS.track }} cornerRadius={8} />
+          <RadialBar dataKey="value" background={{ fill: CHART_COLORS.track }} cornerRadius={8} {...SERIES_ANIMATION} />
         </RadialBarChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
