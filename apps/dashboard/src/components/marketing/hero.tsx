@@ -21,7 +21,7 @@ export function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-border bg-white/80 py-1 pr-3 pl-1 text-[13px] text-muted-foreground shadow-sm backdrop-blur transition-colors hover:border-border-strong hover:text-foreground"
           >
             <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[12px] font-semibold text-primary">New</span>
-            Cache tags and signed URLs on every plan
+            Cache tags and signed URLs for every website
           </a>
           <h1
             id="hero-title"

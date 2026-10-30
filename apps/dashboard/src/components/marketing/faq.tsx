@@ -31,11 +31,7 @@ export const FAQS = [
   },
   {
     q: 'How long do you keep analytics?',
-    a: '7 days on Free, 30 days on Pro and 90 days on Business. Enterprise plans can keep data for longer. Analytics are aggregated from every request, not sampled.',
-  },
-  {
-    q: 'What happens if I change plans?',
-    a: 'Upgrades take effect immediately and are prorated. If you downgrade, the change applies at the end of your billing period, and we will tell you in advance if anything you use is above the new plan’s limits.',
+    a: 'Request-level analytics are kept for 90 days, and hourly and daily summaries for 13 months. Analytics are aggregated from every request, not sampled.',
   },
 ];
 

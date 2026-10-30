@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export const PLAN_OPTIONS = ['Not sure yet', 'Free', 'Pro', 'Business', 'Enterprise'];
+export const INTEREST_OPTIONS = ['All of it', 'Websites and caching', 'Object storage', 'Analytics', 'Teams and API access'];
 
 type Errors = Partial<Record<'name' | 'email' | 'company', string>>;
 
@@ -25,9 +25,9 @@ export function validateDemoRequest(values: { name: string; email: string; compa
  * The demo request form. Client-side only: it validates and shows a
  * confirmation, but does not send anything anywhere.
  */
-export function DemoForm({ defaultPlan = 'Not sure yet', compact = false }: { defaultPlan?: string; compact?: boolean }) {
+export function DemoForm({ compact = false }: { compact?: boolean }) {
   const id = useId();
-  const [values, setValues] = useState({ name: '', email: '', company: '', plan: defaultPlan, message: '' });
+  const [values, setValues] = useState({ name: '', email: '', company: '', interest: INTEREST_OPTIONS[0], message: '' });
   const [errors, setErrors] = useState<Errors>({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -63,7 +63,7 @@ export function DemoForm({ defaultPlan = 'Not sure yet', compact = false }: { de
           variant="outline"
           onClick={() => {
             setSubmitted(false);
-            setValues({ name: '', email: '', company: '', plan: defaultPlan, message: '' });
+            setValues({ name: '', email: '', company: '', interest: INTEREST_OPTIONS[0], message: '' });
           }}
         >
           Send another request
@@ -104,12 +104,12 @@ export function DemoForm({ defaultPlan = 'Not sure yet', compact = false }: { de
       <div className={cn('grid gap-4', !compact && 'sm:grid-cols-2')}>
         {field('company', 'Company', { autoComplete: 'organization', placeholder: 'Northwind Shop' })}
         <div>
-          <label htmlFor={`${id}-plan`} className="text-[13px] font-medium text-foreground">
-            Plan you are interested in
+          <label htmlFor={`${id}-interest`} className="text-[13px] font-medium text-foreground">
+            What would you like to see?
           </label>
-          <Select id={`${id}-plan`} name="plan" value={values.plan} onChange={update('plan')} className="mt-1.5 h-10 text-[15px]">
-            {PLAN_OPTIONS.map((plan) => (
-              <option key={plan}>{plan}</option>
+          <Select id={`${id}-interest`} name="interest" value={values.interest} onChange={update('interest')} className="mt-1.5 h-10 text-[15px]">
+            {INTEREST_OPTIONS.map((option) => (
+              <option key={option}>{option}</option>
             ))}
           </Select>
         </div>

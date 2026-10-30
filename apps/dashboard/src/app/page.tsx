@@ -9,7 +9,6 @@ import { HowItWorks } from '@/components/marketing/how-it-works';
 import { UseCases } from '@/components/marketing/use-cases';
 import { Developers } from '@/components/marketing/developers';
 import { Performance } from '@/components/marketing/performance';
-import { Pricing } from '@/components/marketing/pricing';
 import { Testimonials } from '@/components/marketing/testimonials';
 import { Faq } from '@/components/marketing/faq';
 import { Contact } from '@/components/marketing/contact';
@@ -62,19 +61,6 @@ export default function LandingPage() {
         <UseCases />
         <Developers />
         <Performance />
-
-        <section id="pricing" aria-labelledby="pricing-title" className="bg-background py-20 sm:py-28">
-          <Container>
-            <SectionHeading
-              id="pricing-title"
-              align="center"
-              kicker="Pricing"
-              title="Simple plans that grow with you"
-              lede="Start free. Move up when your traffic does. Every plan includes the edge network, storage and analytics."
-            />
-            <Pricing />
-          </Container>
-        </section>
 
         <Testimonials />
 

@@ -11,7 +11,6 @@ const COLUMNS = [
       ['Object storage', '#products'],
       ['Signed URLs', '#products'],
       ['Analytics', '#products'],
-      ['Pricing', '#pricing'],
     ],
   },
   {

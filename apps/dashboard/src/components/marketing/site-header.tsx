@@ -12,7 +12,6 @@ export const NAV_LINKS = [
   { href: '#how-it-works', label: 'How it works' },
   { href: '#use-cases', label: 'Use cases' },
   { href: '#developers', label: 'Developers' },
-  { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ];
 
