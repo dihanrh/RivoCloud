@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Audit, type OrgRole } from '@rivocloud/security';
 import { JwtOnlyGuard } from '../auth/jwt-only.guard.js';
 import { AuthCtx, type AuthContext } from '../auth/auth-context.decorator.js';
 import { OrganizationsService } from './organizations.service.js';
+import { OrgMemberGuard } from './org-member.guard.js';
 import { RolesGuard, Roles } from './roles.guard.js';
 import { CreateOrgDto } from './dto/create-org.dto.js';
 import { UpdateOrgDto } from './dto/update-org.dto.js';
@@ -10,7 +12,7 @@ import { UpdateMemberDto } from './dto/update-member.dto.js';
 import { AuthService } from '../auth/auth.service.js';
 
 @Controller('api/v1/orgs')
-@UseGuards(JwtOnlyGuard, RolesGuard)
+@UseGuards(JwtOnlyGuard, OrgMemberGuard, RolesGuard)
 export class OrganizationsController {
   constructor(
     private readonly orgs: OrganizationsService,
@@ -18,6 +20,7 @@ export class OrganizationsController {
   ) {}
 
   @Post()
+  @Audit('org.created', { resourceType: 'organization', idPath: 'organization.id', orgIdPath: 'organization.id' })
   async create(@AuthCtx() authCtx: AuthContext, @Body() dto: CreateOrgDto) {
     const org = await this.orgs.create(authCtx.userId, dto.name);
     const tokens = await this.auth.selectOrg(authCtx.userId, org.id);
@@ -30,17 +33,20 @@ export class OrganizationsController {
   }
 
   @Get(':orgId')
-  async get(@AuthCtx() authCtx: AuthContext, @Param('orgId') orgId: string) {
-    return this.orgs.getForMember(orgId, authCtx.userId);
+  async get(@Param('orgId') orgId: string) {
+    return this.orgs.get(orgId);
   }
 
   @Patch(':orgId')
+  @Audit('org.updated', { resourceType: 'organization', idParam: 'orgId', bodyFields: ['name'] })
   @Roles('owner', 'admin')
   async update(@Param('orgId') orgId: string, @Body() dto: UpdateOrgDto) {
     return this.orgs.update(orgId, dto);
   }
 
   @Delete(':orgId')
+  // The org row is deleted, so the entry cannot reference it.
+  @Audit('org.deleted', { resourceType: 'organization', idParam: 'orgId', detachOrg: true })
   @Roles('owner')
   async remove(@Param('orgId') orgId: string) {
     await this.orgs.delete(orgId);
@@ -53,13 +59,20 @@ export class OrganizationsController {
   }
 
   @Post(':orgId/members')
+  @Audit('member.added', { resourceType: 'member', idPath: 'userId', bodyFields: ['email', 'role'] })
   @Roles('owner', 'admin')
-  async addMember(@AuthCtx() authCtx: AuthContext, @Param('orgId') orgId: string, @Body() dto: AddMemberDto) {
-    return this.orgs.addMember(orgId, authCtx.userId, dto.email, dto.role);
+  async addMember(
+    @AuthCtx() authCtx: AuthContext,
+    @Req() req: { orgRole: OrgRole },
+    @Param('orgId') orgId: string,
+    @Body() dto: AddMemberDto,
+  ) {
+    return this.orgs.addMember(orgId, authCtx.userId, req.orgRole, dto.email, dto.role);
   }
 
   @Patch(':orgId/members/:userId')
-  @Roles('owner', 'admin')
+  @Audit('member.role_updated', { resourceType: 'member', idParam: 'userId', bodyFields: ['role'] })
+  @Roles('owner')
   async updateMember(
     @Param('orgId') orgId: string,
     @Param('userId') userId: string,
@@ -69,9 +82,10 @@ export class OrganizationsController {
   }
 
   @Delete(':orgId/members/:userId')
+  @Audit('member.removed', { resourceType: 'member', idParam: 'userId' })
   @Roles('owner', 'admin')
-  async removeMember(@Param('orgId') orgId: string, @Param('userId') userId: string) {
-    await this.orgs.removeMember(orgId, userId);
+  async removeMember(@Req() req: { orgRole: OrgRole }, @Param('orgId') orgId: string, @Param('userId') userId: string) {
+    await this.orgs.removeMember(orgId, req.orgRole, userId);
     return { success: true };
   }
 }

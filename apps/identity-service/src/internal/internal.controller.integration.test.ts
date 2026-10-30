@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
+import { orgWithDeveloper } from '../test-support/org-fixtures.js';
 import { loadEnv } from '../env.js';
 
 describe('Internal auth verification endpoints', () => {
@@ -73,5 +74,72 @@ describe('Internal auth verification endpoints', () => {
       .send({ apiKey: key.body.rawKey });
     expect(verify.status).toBe(201);
     expect(verify.body.permissions).toEqual(['zone:read']);
+  });
+
+  it('verify-token returns the live role', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'liverole');
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-token')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ token: devToken });
+    expect(verify.status).toBe(201);
+    expect(verify.body).toEqual({ userId: devUserId, orgId, role: 'viewer' });
+  });
+
+  it('verify-token rejects a removed member', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'removed');
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-token')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ token: devToken });
+    expect(verify.status).toBe(401);
+    expect(verify.body.message).toBe('No longer a member of this organization');
+  });
+
+  it('verify-api-key returns apiKeyId and effective permissions', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'effective');
+    const key = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${devToken}`)
+      .send({ name: 'Dev key', permissions: ['zone:read', 'zone:write'] });
+    expect(key.status).toBe(201);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-api-key')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ apiKey: key.body.rawKey });
+    expect(verify.status).toBe(201);
+    expect(verify.body).toEqual({ orgId, userId: devUserId, apiKeyId: key.body.id, permissions: ['zone:read'] });
+  });
+
+  it('api key is invalid after its creator leaves the org', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'leaver');
+    const key = await request(app.getHttpServer())
+      .post('/api/v1/api-keys')
+      .set('Authorization', `Bearer ${devToken}`)
+      .send({ name: 'Leaver key', permissions: ['zone:read'] });
+    expect(key.status).toBe(201);
+    await request(app.getHttpServer())
+      .delete(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+
+    const verify = await request(app.getHttpServer())
+      .post('/internal/auth/verify-api-key')
+      .set('X-Internal-Secret', internalSecret)
+      .send({ apiKey: key.body.rawKey });
+    expect(verify.status).toBe(401);
   });
 });

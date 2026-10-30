@@ -1,4 +1,5 @@
 import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
+import { NoAudit, RATE_LIMITS, RateLimit } from '@rivocloud/security';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -11,17 +12,21 @@ import { SelectOrgDto } from './dto/select-org.dto.js';
 import { JwtOnlyGuard } from './jwt-only.guard.js';
 import { AuthCtx, type AuthContext } from './auth-context.decorator.js';
 
+// Auth flows are not audited (no actor yet, and bodies carry credentials).
+@NoAudit()
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
+  @RateLimit(RATE_LIMITS.auth)
   async register(@Body() dto: RegisterDto) {
     const user = await this.auth.register(dto.email, dto.password, dto.name);
     return { id: user.id, email: user.email, name: user.name };
   }
 
   @Post('login')
+  @RateLimit(RATE_LIMITS.auth)
   async login(@Body() dto: LoginDto) {
     return this.auth.login(dto.email, dto.password);
   }
@@ -45,6 +50,7 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @RateLimit(RATE_LIMITS.forgotPassword)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     await this.auth.requestPasswordReset(dto.email);
     return { success: true };

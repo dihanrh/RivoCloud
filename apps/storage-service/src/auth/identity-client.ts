@@ -4,6 +4,7 @@ import type { CombinedAuthContext } from './auth-context.decorator.js';
 interface IdentityResponseBody {
   userId?: string | null;
   orgId?: string | null;
+  apiKeyId?: string;
   role?: string | null;
   permissions?: string[];
 }
@@ -22,7 +23,7 @@ export class IdentityClient {
 
   async verifyApiKey(apiKey: string): Promise<CombinedAuthContext> {
     const body = await this.post('/internal/auth/verify-api-key', { apiKey }, 'Invalid API key');
-    return { type: 'api_key', userId: body.userId ?? null, orgId: body.orgId ?? null, role: null, permissions: body.permissions };
+    return { type: 'api_key', userId: body.userId ?? null, orgId: body.orgId ?? null, role: null, apiKeyId: body.apiKeyId, permissions: body.permissions };
   }
 
   private async post(path: string, payload: unknown, failureMessage: string): Promise<IdentityResponseBody> {

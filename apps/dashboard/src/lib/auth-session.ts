@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { decodeAccessToken, isExpired } from './jwt';
 import { backendFetch } from './backend-fetch';
+import { clientForwardHeaders } from './forwarded-headers';
 import { getEnv } from './env';
 import {
   ACCESS_COOKIE,
@@ -36,9 +37,11 @@ export async function refreshTokens(refreshToken: string): Promise<AuthTokens | 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
     try {
+      const forwarded = await clientForwardHeaders();
       return (await backendFetch(getEnv().IDENTITY_SERVICE_URL, '/api/v1/auth/refresh', {
         method: 'POST',
         body: JSON.stringify({ refreshToken }),
+        headers: forwarded,
         signal: controller.signal,
       })) as AuthTokens;
     } catch {

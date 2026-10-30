@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('next/headers', () => ({
+  headers: async () =>
+    new Headers({ 'x-forwarded-for': '203.0.113.9', 'user-agent': 'TestAgent/1.0' }),
+}));
+
 const resolveSessionMock = vi.fn();
 vi.mock('./auth-session', () => ({
   resolveSession: () => resolveSessionMock(),
@@ -59,5 +64,19 @@ describe('proxyToBackend', () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ message: 'not found' });
+  });
+
+  it('forwards x-forwarded-for and user-agent', async () => {
+    resolveSessionMock.mockResolvedValue({ accessToken: 'jwt', org: 'org-1', newTokens: null });
+    vi.mocked(backendFetch).mockResolvedValue({});
+
+    await proxyToBackend('http://svc', '/api/v1/zones', { headers: { 'X-Custom': 'a' } });
+
+    const init = vi.mocked(backendFetch).mock.calls[0]![2] as { headers: Record<string, string> };
+    expect(init.headers).toMatchObject({
+      'X-Forwarded-For': '203.0.113.9',
+      'User-Agent': 'TestAgent/1.0',
+      'X-Custom': 'a',
+    });
   });
 });

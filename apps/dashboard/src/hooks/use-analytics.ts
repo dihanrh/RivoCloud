@@ -24,10 +24,15 @@ export function toSearchParams(params: AnalyticsQueryParams): string {
   return qs ? `?${qs}` : '';
 }
 
+// Analytics queries are rate limited (60/min) and a page fires several per filter change,
+// so don't refetch on every window refocus.
+const ANALYTICS_STALE_TIME_MS = 30_000;
+
 function useAnalytics<T>(key: string, params: AnalyticsQueryParams) {
   return useQuery({
     queryKey: ['analytics', key, params],
     queryFn: () => apiFetch<T>(`/api/analytics/${key}${toSearchParams(params)}`),
+    staleTime: ANALYTICS_STALE_TIME_MS,
   });
 }
 

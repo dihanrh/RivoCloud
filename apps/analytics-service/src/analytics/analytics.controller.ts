@@ -1,6 +1,6 @@
 import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth-guard.js';
-import { AnalyticsAccessGuard } from '../auth/analytics-access.guard.js';
+import { RATE_LIMITS, RateLimit, RequireScope, ScopeGuard } from '@rivocloud/security';
 import { AuthCtx, type CombinedAuthContext } from '../auth/auth-context.decorator.js';
 import { AnalyticsService } from './analytics.service.js';
 import { AnalyticsQueryDto } from './dto/analytics-query.dto.js';
@@ -13,7 +13,9 @@ function requireOrgId(auth: CombinedAuthContext): string {
 }
 
 @Controller('api/v1/analytics')
-@UseGuards(AuthGuard, AnalyticsAccessGuard)
+@UseGuards(AuthGuard, ScopeGuard)
+@RequireScope('analytics:read')
+@RateLimit(RATE_LIMITS.analytics)
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 

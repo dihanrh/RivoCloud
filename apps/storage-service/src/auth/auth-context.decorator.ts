@@ -1,13 +1,7 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { SecurityAuthContext } from '@rivocloud/security';
 
-export interface CombinedAuthContext {
-  type: 'jwt' | 'api_key';
-  userId: string | null;
-  orgId: string | null;
-  role: string | null;
-  apiKeyId?: string;
-  permissions?: string[];
-}
+export type CombinedAuthContext = SecurityAuthContext;
 
 export const AuthCtx = createParamDecorator((_data: unknown, ctx: ExecutionContext): CombinedAuthContext => {
   const request = ctx.switchToHttp().getRequest();

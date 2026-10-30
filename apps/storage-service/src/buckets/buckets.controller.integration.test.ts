@@ -42,6 +42,7 @@ describe('BucketsController', () => {
   });
 
   beforeEach(async () => {
+    await prisma.auditLog.deleteMany();
     await prisma.storageObject.deleteMany();
     await prisma.bucket.deleteMany();
     await prisma.organizationMember.deleteMany();
@@ -72,7 +73,7 @@ describe('BucketsController', () => {
     expect(response.body.name).toBe('My Bucket');
   });
 
-  it('rejects a viewer trying to create a bucket', async () => {
+  it('viewer JWT cannot create a bucket', async () => {
     await seedOrgAndAuth('viewer');
     const response = await request(app.getHttpServer())
       .post('/api/v1/buckets')
@@ -118,5 +119,20 @@ describe('BucketsController', () => {
       .get(`/api/v1/buckets/${created.body.id}`)
       .set('Authorization', 'Bearer whatever');
     expect(getAfterDelete.status).toBe(404);
+  });
+
+  it('deleting a bucket writes bucket.deleted', async () => {
+    const org = await seedOrgAndAuth('admin');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/buckets')
+      .set('Authorization', 'Bearer whatever')
+      .send({ name: 'A1' });
+    const deleted = await request(app.getHttpServer())
+      .delete(`/api/v1/buckets/${created.body.id}`)
+      .set('Authorization', 'Bearer whatever');
+    expect(deleted.status).toBe(200);
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: 'bucket.deleted' } });
+    expect(row.resourceId).toBe(created.body.id);
+    expect(row.orgId).toBe(org.id);
   });
 });

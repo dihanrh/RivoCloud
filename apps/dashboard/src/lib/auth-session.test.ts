@@ -6,6 +6,7 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({
     get: (name: string) => cookieStore.get(name),
   }),
+  headers: async () => new Headers({ 'x-forwarded-for': '203.0.113.9', 'user-agent': 'TestAgent/1.0' }),
 }));
 
 vi.mock('./env', () => ({
@@ -20,6 +21,25 @@ function fakeJwt(payload: Record<string, unknown>): string {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${header}.${body}.sig`;
 }
+
+describe('refreshTokens', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('forwards the client IP and user agent to the identity refresh call', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ accessToken: 'a', refreshToken: 'r' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await refreshTokens('refresh-token-forwarding');
+
+    const init = fetchMock.mock.calls[0]![1];
+    expect(init.headers['X-Forwarded-For']).toBe('203.0.113.9');
+    expect(init.headers['User-Agent']).toBe('TestAgent/1.0');
+  });
+});
 
 describe('resolveSession', () => {
   afterEach(() => {

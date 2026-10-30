@@ -128,3 +128,60 @@ export interface AnalyticsQueryParams {
   to?: string;
   granularity?: 'hour' | 'day' | 'week';
 }
+
+export type OrgRole = 'owner' | 'admin' | 'developer' | 'viewer';
+
+export type ApiKeyScope =
+  | 'zone:read'
+  | 'zone:write'
+  | 'zone:delete'
+  | 'cache:invalidate'
+  | 'storage:read'
+  | 'storage:write'
+  | 'storage:delete'
+  | 'analytics:read'
+  | 'billing:read';
+
+export interface OrgMember {
+  userId: string;
+  role: OrgRole;
+  joinedAt: string | null;
+  user: { id: string; email: string; name: string };
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  permissions: string[];
+  // Creator of the key; null when the creating user was deleted.
+  userId: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface CreatedApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  permissions: string[];
+  rawKey: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: unknown;
+  createdAt: string;
+  user: { id: string; email: string; name: string } | null;
+  apiKey: { id: string; name: string; keyPrefix: string } | null;
+}
+
+export interface AuditLogPage {
+  items: AuditLogEntry[];
+  nextCursor: string | null;
+}

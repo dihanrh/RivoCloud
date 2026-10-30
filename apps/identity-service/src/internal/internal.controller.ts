@@ -1,8 +1,10 @@
 import { Body, Controller, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { IsString } from 'class-validator';
+import { NoAudit } from '@rivocloud/security';
 import { InternalSecretGuard } from './internal-secret.guard.js';
 import { TokenService } from '../auth/token.service.js';
 import { ApiKeysService } from '../api-keys/api-keys.service.js';
+import { MembershipService } from '../organizations/membership.service.js';
 
 class VerifyTokenDto {
   @IsString()
@@ -14,12 +16,15 @@ class VerifyApiKeyDto {
   apiKey!: string;
 }
 
+// Service-to-service verification calls are reads in effect; nothing to audit.
+@NoAudit()
 @Controller('internal/auth')
 @UseGuards(InternalSecretGuard)
 export class InternalController {
   constructor(
     private readonly tokens: TokenService,
     private readonly apiKeys: ApiKeysService,
+    private readonly membership: MembershipService,
   ) {}
 
   @Post('verify-token')
@@ -33,7 +38,9 @@ export class InternalController {
     if (await this.tokens.isAccessTokenBlacklisted(claims.jti)) {
       throw new UnauthorizedException('Token has been revoked');
     }
-    return { userId: claims.sub, orgId: claims.org, role: claims.role };
+    // The role claim can be stale for up to the access-token TTL; return the live role.
+    const role = await this.membership.roleForTokenClaims(claims.org, claims.sub);
+    return { userId: claims.sub, orgId: claims.org, role };
   }
 
   @Post('verify-api-key')
@@ -42,6 +49,6 @@ export class InternalController {
     if (!key) {
       throw new UnauthorizedException('Invalid API key');
     }
-    return { orgId: key.orgId, userId: key.userId, permissions: key.permissions };
+    return { orgId: key.orgId, userId: key.userId, apiKeyId: key.id, permissions: key.permissions };
   }
 }

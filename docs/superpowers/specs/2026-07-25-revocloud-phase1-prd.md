@@ -1,6 +1,6 @@
 # RivoCloud — Phase 1 Product Requirements Document (PRD)
 
-**Status:** Draft — Stages 1-8 (Infrastructure Foundation, Identity Service, Go Edge Proxy, CDN Service, Storage Service, Dashboard MVP: auth/zone/storage UI, NATS Invalidation, Custom Domains + TLS) complete, Stages 9–16 not started.
+**Status:** Draft — Stages 1–11 complete, Stages 12–16 not started.
 **Owner:** RivoCloud engineering.
 **Companion documents:**
 - [`2026-06-29-revocloud-master-architecture.md`](2026-06-29-revocloud-master-architecture.md) — product vision, long-term strategy, technology decisions (the "why" behind the whole product).
@@ -153,7 +153,7 @@ The 16-stage build order from the EDD (Section 11, Development Order), unchanged
 | 8 | Custom Domains + TLS — Traefik Redis provider, DNS verification | 3 | ✅ Done | 4 | [`custom-domains-and-tls.md`](../../concepts/custom-domains-and-tls.md) |
 | 9 | Analytics — edge events to NATS, ClickHouse ingestion, charts | 5 | ✅ Done | 3, 6 | [`analytics-and-clickhouse.md`](../../concepts/analytics-and-clickhouse.md) |
 | 10 | Signed URLs — HMAC generation + edge verification | 4 | ✅ Done | 5 | [`signed-urls-and-hmac.md`](../../concepts/signed-urls-and-hmac.md) |
-| 11 | Security + RBAC — roles, audit logging, rate limiting | 6 | Not started | 2 | [`security-rbac-and-audit-logging.md`](../../concepts/security-rbac-and-audit-logging.md) |
+| 11 | Security + RBAC — roles, audit logging, rate limiting | 6 | ✅ Done | 2 | [`security-rbac-and-audit-logging.md`](../../concepts/security-rbac-and-audit-logging.md) |
 | 12 | Billing — Stripe Checkout, webhooks, plan limits | 7 | Not started | 2, 9 | [`billing-and-stripe.md`](../../concepts/billing-and-stripe.md) |
 | 13 | Kubernetes Migration — k3s on Oracle, ArgoCD GitOps | 9 | Not started | 4, 5, 6, 7, 8, 9, 10, 11, 12 | [`kubernetes-and-gitops.md`](../../concepts/kubernetes-and-gitops.md) |
 | 14 | First Hetzner Edge Node — Ansible, edge-proxy + Redis, NATS cluster, GeoDNS | 8 | Not started | 13 | [`edge-nodes-and-geodns.md`](../../concepts/edge-nodes-and-geodns.md) |

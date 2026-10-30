@@ -26,7 +26,7 @@ describe('IdentityClient', () => {
         } else if (req.url === '/internal/auth/verify-api-key') {
           if (parsed.apiKey === 'rc_valid') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ userId: 'u1', orgId: 'o1', permissions: ['zone:read'] }));
+            res.end(JSON.stringify({ userId: 'u1', orgId: 'o1', apiKeyId: 'k1', permissions: ['zone:read'] }));
           } else {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ message: 'Invalid API key' }));
@@ -64,7 +64,7 @@ describe('IdentityClient', () => {
   it('parses a verified API key with its permissions', async () => {
     const client = new IdentityClient(baseUrl, 'test-secret');
     const identity = await client.verifyApiKey('rc_valid');
-    expect(identity).toEqual({ type: 'api_key', userId: 'u1', orgId: 'o1', role: null, permissions: ['zone:read'] });
+    expect(identity).toEqual({ type: 'api_key', userId: 'u1', orgId: 'o1', role: null, apiKeyId: 'k1', permissions: ['zone:read'] });
   });
 
   it('throws UnauthorizedException for an invalid API key', async () => {

@@ -3,7 +3,11 @@ import type { PrismaClient } from '@rivocloud/db';
 import { PRISMA } from '../prisma/prisma.module.js';
 import { EventsService } from '../events/events.service.js';
 import { slugify } from './slug.util.js';
-import type { OrgRole } from './roles.js';
+import type { OrgRole } from '@rivocloud/security';
+import type { AssignableRole } from './dto/assignable-roles.js';
+
+/** Roles an Admin may invite or remove; any other target role needs the Owner. */
+const ADMIN_MANAGEABLE_ROLES: readonly string[] = ['developer', 'viewer'];
 
 @Injectable()
 export class OrganizationsService {
@@ -37,13 +41,8 @@ export class OrganizationsService {
     return this.db.organization.findMany({ where: { members: { some: { userId } } } });
   }
 
-  async getForMember(orgId: string, userId: string) {
-    const membership = await this.db.organizationMember.findUnique({
-      where: { orgId_userId: { orgId, userId } },
-    });
-    if (!membership) {
-      throw new NotFoundException('Organization not found');
-    }
+  /** Callers have already passed OrgMemberGuard for this org. */
+  async get(orgId: string) {
     return this.db.organization.findUniqueOrThrow({ where: { id: orgId } });
   }
 
@@ -56,10 +55,22 @@ export class OrganizationsService {
   }
 
   async listMembers(orgId: string) {
-    return this.db.organizationMember.findMany({ where: { orgId }, include: { user: true } });
+    return this.db.organizationMember.findMany({
+      where: { orgId },
+      select: {
+        userId: true,
+        role: true,
+        joinedAt: true,
+        user: { select: { id: true, email: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
-  async addMember(orgId: string, invitedBy: string, email: string, role: OrgRole) {
+  async addMember(orgId: string, invitedBy: string, callerRole: OrgRole, email: string, role: AssignableRole) {
+    if (callerRole !== 'owner' && !ADMIN_MANAGEABLE_ROLES.includes(role)) {
+      throw new ForbiddenException(`Only the owner can invite members as ${role}`);
+    }
     const user = await this.db.user.findUnique({ where: { email } });
     if (!user) {
       throw new NotFoundException('No registered user with that email — they must sign up first');
@@ -75,7 +86,7 @@ export class OrganizationsService {
     });
   }
 
-  async updateMemberRole(orgId: string, targetUserId: string, role: OrgRole) {
+  async updateMemberRole(orgId: string, targetUserId: string, role: AssignableRole) {
     const membership = await this.db.organizationMember.findUnique({
       where: { orgId_userId: { orgId, userId: targetUserId } },
     });
@@ -91,7 +102,7 @@ export class OrganizationsService {
     });
   }
 
-  async removeMember(orgId: string, targetUserId: string) {
+  async removeMember(orgId: string, callerRole: OrgRole, targetUserId: string) {
     const membership = await this.db.organizationMember.findUnique({
       where: { orgId_userId: { orgId, userId: targetUserId } },
     });
@@ -100,6 +111,9 @@ export class OrganizationsService {
     }
     if (membership.role === 'owner') {
       throw new ForbiddenException('Cannot remove the organization owner');
+    }
+    if (callerRole !== 'owner' && !ADMIN_MANAGEABLE_ROLES.includes(membership.role)) {
+      throw new ForbiddenException(`Only the owner can remove a member with role ${membership.role}`);
     }
     await this.db.organizationMember.delete({ where: { orgId_userId: { orgId, userId: targetUserId } } });
   }

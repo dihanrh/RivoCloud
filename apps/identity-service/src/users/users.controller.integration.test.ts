@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { prisma } from '@rivocloud/db';
 import { AppModule } from '../app.module.js';
+import { orgWithDeveloper } from '../test-support/org-fixtures.js';
 
 describe('User profile endpoints', () => {
   let app: INestApplication;
@@ -45,6 +46,7 @@ describe('User profile endpoints', () => {
       .set('Authorization', `Bearer ${accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.email).toBe('carol@example.com');
+    expect(me.body.role).toBeNull();
 
     const updated = await request(app.getHttpServer())
       .patch('/api/v1/users/me')
@@ -52,6 +54,24 @@ describe('User profile endpoints', () => {
       .send({ name: 'Carol Danvers' });
     expect(updated.status).toBe(200);
     expect(updated.body.name).toBe('Carol Danvers');
+  });
+
+  it('reports the live org role, not the stale JWT claim', async () => {
+    const { orgId, ownerToken, devUserId, devToken } = await orgWithDeveloper(app, 'merole');
+    const before = await request(app.getHttpServer()).get('/api/v1/users/me').set('Authorization', `Bearer ${devToken}`);
+    expect(before.status).toBe(200);
+    expect(before.body.role).toBe('developer');
+
+    const demote = await request(app.getHttpServer())
+      .patch(`/api/v1/orgs/${orgId}/members/${devUserId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ role: 'viewer' });
+    expect(demote.status).toBe(200);
+
+    // Same token (its role claim still says developer).
+    const after = await request(app.getHttpServer()).get('/api/v1/users/me').set('Authorization', `Bearer ${devToken}`);
+    expect(after.status).toBe(200);
+    expect(after.body.role).toBe('viewer');
   });
 
   it('changes the password and rejects the wrong current password', async () => {

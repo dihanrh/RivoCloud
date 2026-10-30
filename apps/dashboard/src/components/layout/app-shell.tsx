@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/zones', label: 'Zones' },
   { href: '/analytics', label: 'Analytics' },
   { href: '/storage', label: 'Storage' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

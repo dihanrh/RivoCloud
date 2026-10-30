@@ -20,6 +20,7 @@
     "@nestjs/platform-express": "^10.4.4",
     "@rivocloud/config": "workspace:*",
     "@rivocloud/db": "workspace:*",
+    "@rivocloud/security": "workspace:*",
     "bcryptjs": "^2.4.3",
     "bs58": "^6.0.0",
     "class-transformer": "^0.5.1",

@@ -18,6 +18,24 @@ describe('backendFetch', () => {
     expect(init.headers.Authorization).toBe('Bearer jwt-123');
   });
 
+  it('sends caller-supplied forwarded headers alongside Authorization', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await backendFetch('http://svc', '/api/v1/thing', {
+      accessToken: 'jwt-123',
+      headers: { 'X-Forwarded-For': '203.0.113.9', 'User-Agent': 'TestAgent/1.0' },
+    });
+
+    const init = fetchMock.mock.calls[0]![1];
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer jwt-123',
+      'X-Forwarded-For': '203.0.113.9',
+      'User-Agent': 'TestAgent/1.0',
+      'Content-Type': 'application/json',
+    });
+  });
+
   it('throws BackendError with the status and parsed body on a non-2xx response', async () => {
     vi.stubGlobal(
       'fetch',
