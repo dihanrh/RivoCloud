@@ -1,64 +1,107 @@
-import Link from 'next/link';
-import { BrandLockup } from '@/components/brand/brand';
-import { Button } from '@/components/ui/button';
+import type { Metadata } from 'next';
+import '@/components/marketing/marketing.css';
+import { SiteHeader } from '@/components/marketing/site-header';
+import { Hero } from '@/components/marketing/hero';
+import { TrustStrip } from '@/components/marketing/trust-strip';
+import { Container, SectionHeading } from '@/components/marketing/section-heading';
+import { FeatureTabs } from '@/components/marketing/feature-tabs';
+import { HowItWorks } from '@/components/marketing/how-it-works';
+import { UseCases } from '@/components/marketing/use-cases';
+import { Developers } from '@/components/marketing/developers';
+import { Performance } from '@/components/marketing/performance';
+import { Pricing } from '@/components/marketing/pricing';
+import { Testimonials } from '@/components/marketing/testimonials';
+import { Faq } from '@/components/marketing/faq';
+import { Contact } from '@/components/marketing/contact';
+import { SiteFooter } from '@/components/marketing/site-footer';
 
-const CAPABILITIES = [
-  {
-    title: 'Websites and CDN caching',
-    body: 'Put your site behind a global edge network. Set cache lifetimes per website and purge cached files when you publish.',
-  },
-  {
-    title: 'Object storage with signed links',
-    body: 'Store files in buckets and share private files with time-limited signed links.',
-  },
-  {
-    title: 'Traffic analytics',
-    body: 'See requests, bandwidth, cache hit ratio, latency and where your visitors are, for one website or all of them.',
-  },
-];
+export const metadata: Metadata = {
+  title: 'RivoCloud: CDN, object storage and analytics in one console',
+  description:
+    'Cache your website at the edge, store files in S3-compatible buckets and see every request in real time. Instant purges, signed URLs, automatic TLS and team roles.',
+};
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-8">
-        <BrandLockup href="/" />
-        <nav className="flex items-center gap-2" aria-label="Account">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/login">Log in</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href="/register">Sign up</Link>
-          </Button>
-        </nav>
-      </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-16 sm:px-8 sm:py-24">
-        <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
-          Speed up your website and store your files in one place.
-        </h1>
-        <p className="mt-5 max-w-2xl text-base text-muted-foreground">
-          RivoCloud is a CDN, object storage and analytics platform with a single console. Add a website, cache it at the edge,
-          keep your files in buckets, and watch the traffic.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild size="lg">
-            <Link href="/register">Create an account</Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link href="/login">Log in</Link>
-          </Button>
-        </div>
-        <ul className="mt-16 divide-y divide-border border-y border-border">
-          {CAPABILITIES.map((item) => (
-            <li key={item.title} className="grid gap-1 py-5 sm:grid-cols-[16rem_1fr] sm:gap-8">
-              <h2 className="text-base font-semibold">{item.title}</h2>
-              <p className="text-[13px] text-muted-foreground">{item.body}</p>
-            </li>
-          ))}
-        </ul>
+    <div className="marketing-root min-h-screen bg-background text-[15px] text-foreground">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-foreground focus:px-3 focus:py-2 focus:text-white"
+      >
+        Skip to content
+      </a>
+      <SiteHeader />
+      <main id="main" className="overflow-x-clip">
+        <Hero />
+        <TrustStrip />
+
+        <section id="products" aria-labelledby="products-title" className="bg-background py-20 sm:py-28">
+          <Container>
+            <SectionHeading
+              id="products-title"
+              kicker="Products"
+              title="Three products, one console"
+              lede="Websites, storage and analytics share the same edge network, the same team and the same API. Pick a product to see it in action."
+            />
+            <FeatureTabs />
+          </Container>
+        </section>
+
+        <section id="how-it-works" aria-labelledby="how-title" className="bg-muted/70 py-20 sm:py-28">
+          <Container>
+            <SectionHeading
+              id="how-title"
+              kicker="How it works"
+              title="From origin to edge in four steps"
+              lede="Most teams are serving traffic through RivoCloud within an hour. Select a step to see what happens behind the scenes."
+            />
+            <HowItWorks />
+          </Container>
+        </section>
+
+        <UseCases />
+        <Developers />
+        <Performance />
+
+        <section id="pricing" aria-labelledby="pricing-title" className="bg-background py-20 sm:py-28">
+          <Container>
+            <SectionHeading
+              id="pricing-title"
+              align="center"
+              kicker="Pricing"
+              title="Simple plans that grow with you"
+              lede="Start free. Move up when your traffic does. Every plan includes the edge network, storage and analytics."
+            />
+            <Pricing />
+          </Container>
+        </section>
+
+        <Testimonials />
+
+        <section id="faq" aria-labelledby="faq-title" className="bg-background py-20 sm:py-28">
+          <Container className="grid gap-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-16">
+            <SectionHeading
+              className="lg:sticky lg:top-28 lg:self-start"
+              id="faq-title"
+              kicker="FAQ"
+              title="Questions, answered"
+              lede={
+                <>
+                  Something else on your mind?{' '}
+                  <a href="#contact" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Ask our team
+                  </a>
+                  .
+                </>
+              }
+            />
+            <Faq />
+          </Container>
+        </section>
+
+        <Contact />
       </main>
-      <footer className="border-t border-border px-4 py-5 text-[13px] text-muted-foreground sm:px-8">
-        RivoCloud. CDN, object storage and analytics.
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
