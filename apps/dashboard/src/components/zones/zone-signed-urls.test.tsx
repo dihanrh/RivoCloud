@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ZoneSignedUrls } from './zone-signed-urls';
 import { apiCalls, makeZone, mockApi, renderWithClient } from './test-utils';
@@ -22,6 +22,7 @@ describe('ZoneSignedUrls', () => {
       '/api/zones/zone-1',
       expect.objectContaining({ body: JSON.stringify({ signedUrlsRequired: true }) }),
     ]);
+    expect(await screen.findByText('Signed URLs required')).toBeInTheDocument();
   });
 
   it('hides the rotate action until the zone has a secret', async () => {
@@ -38,14 +39,15 @@ describe('ZoneSignedUrls', () => {
     renderWithClient(<ZoneSignedUrls zone={{ ...zone, signedUrlsRequired: true, hasSigningSecret: true }} />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Rotate signing secret' }));
-    expect(screen.getByRole('dialog')).toHaveTextContent(/stop working right away/i);
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/stop working right away/i);
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
     expect(apiCalls(fetchMock, 'POST')).toHaveLength(0);
 
     await userEvent.click(screen.getByRole('button', { name: 'Rotate signing secret' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rotate secret' }));
 
-    expect(await screen.findByText(/previously shared links no longer work/i)).toBeInTheDocument();
+    expect(await screen.findByText('Signing secret rotated')).toBeInTheDocument();
+    expect(screen.getByText(/previously shared links no longer work/i)).toBeInTheDocument();
     expect(apiCalls(fetchMock, 'POST').map(([url]) => url)).toEqual(['/api/zones/zone-1/signing-secret/rotate']);
   });
 
@@ -53,7 +55,7 @@ describe('ZoneSignedUrls', () => {
     mockApi([], 'viewer');
     renderWithClient(<ZoneSignedUrls zone={{ ...zone, hasSigningSecret: true }} />);
 
-    expect(await screen.findByText(/your role cannot rotate the secret/i)).toBeInTheDocument();
+    expect(await screen.findByText('Rotate signing secret')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /require signed urls/i })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /rotate/i })).not.toBeInTheDocument();
   });

@@ -1,3 +1,4 @@
+import '@/components/ui/test-polyfills';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -27,7 +28,7 @@ const RULES_URL = '/api/zones/zone-1/rules?take=100';
 describe('CacheRules', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('creates a rule with the right body, placed after the existing rules', async () => {
+  it('creates a rule from the sheet with the right body, placed after the existing rules, and toasts', async () => {
     const fetchMock = mockApi([
       { url: RULES_URL, body: { rules: [makeRule({ priority: 3 })], total: 1 } },
       { method: 'POST', url: '/api/zones/zone-1/rules', status: 201, body: makeRule({ id: 'rule-2' }) },
@@ -53,6 +54,7 @@ describe('CacheRules', () => {
       edgeTtl: 600,
       priority: 2,
     });
+    expect(await screen.findByText('Cache rule created')).toBeInTheDocument();
   });
 
   it('requires query parameters when the whitelist option is chosen', async () => {
@@ -69,7 +71,8 @@ describe('CacheRules', () => {
     await userEvent.selectOptions(within(dialog).getByLabelText('Query string in cache key'), 'whitelist');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create rule' }));
 
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(/at least one query parameter/i);
+    expect(within(dialog).getByText(/at least one query parameter/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Query parameters to include')).toHaveAttribute('aria-invalid', 'true');
     expect(apiCalls(fetchMock, 'POST')).toHaveLength(0);
 
     await userEvent.type(within(dialog).getByLabelText('Query parameters to include'), 'q, page');
@@ -88,10 +91,33 @@ describe('CacheRules', () => {
     ]);
     renderWithClient(<CacheRules zoneId="zone-1" />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Move /a down' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Actions for /a' }));
+    expect(await screen.findByRole('menuitem', { name: 'Move up' })).toHaveAttribute('data-disabled');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move down' }));
 
     await vi.waitFor(() => expect(apiCalls(fetchMock, 'POST')).toHaveLength(1));
     expect(JSON.parse(String(apiCalls(fetchMock, 'POST')[0][1]?.body))).toEqual({ order: ['b', 'a'] });
+    expect(await screen.findByText('Rule moved down')).toBeInTheDocument();
+  });
+
+  it('edits a rule in the sheet, sending cleared TTLs as null', async () => {
+    const fetchMock = mockApi([
+      { url: RULES_URL, body: { rules: [makeRule()], total: 1 } },
+      { method: 'PATCH', url: '/api/zones/zone-1/rules/rule-1', body: makeRule({ edgeTtl: null }) },
+    ]);
+    renderWithClient(<CacheRules zoneId="zone-1" />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Actions for /images/*' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Edit cache rule' });
+    expect(within(sheet).getByLabelText('URL pattern')).toHaveValue('/images/*');
+    await userEvent.clear(within(sheet).getByLabelText('Edge TTL (seconds)'));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Save rule' }));
+
+    await vi.waitFor(() => expect(apiCalls(fetchMock, 'PATCH')).toHaveLength(1));
+    expect(JSON.parse(String(apiCalls(fetchMock, 'PATCH')[0][1]?.body))).toMatchObject({ pattern: '/images/*', edgeTtl: null, browserTtl: null });
+    expect(await screen.findByText('Cache rule saved')).toBeInTheDocument();
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit cache rule' })).not.toBeInTheDocument());
   });
 
   it('deletes a rule after confirmation', async () => {
@@ -101,10 +127,14 @@ describe('CacheRules', () => {
     ]);
     renderWithClient(<CacheRules zoneId="zone-1" />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete /images/*' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Delete rule' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Actions for /images/*' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /delete/i }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(apiCalls(fetchMock, 'DELETE')).toHaveLength(0);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete rule' }));
 
     await vi.waitFor(() => expect(apiCalls(fetchMock, 'DELETE')).toHaveLength(1));
+    expect(await screen.findByText('Cache rule deleted')).toBeInTheDocument();
   });
 
   it('shows rules read-only to a viewer', async () => {
@@ -114,6 +144,6 @@ describe('CacheRules', () => {
     expect(await screen.findByText('/images/*')).toBeInTheDocument();
     expect(screen.getByText('1 day')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /create rule/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /edit|delete|move/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /actions for/i })).not.toBeInTheDocument();
   });
 });

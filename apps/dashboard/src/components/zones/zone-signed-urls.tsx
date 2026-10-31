@@ -1,54 +1,52 @@
 'use client';
 
-import { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SettingRow } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { ErrorBanner } from '@/components/ui/empty-state';
-import { useUpdateZone } from '@/hooks/use-update-zone';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SectionTitle } from '@/components/ui/page-header';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/components/ui/toast';
 import { useRotateSigningSecret } from '@/hooks/use-rotate-signing-secret';
+import { useUpdateZone } from '@/hooks/use-update-zone';
 import { useZonePermissions } from '@/hooks/use-zone-permissions';
 import { errorMessage } from '@/lib/http';
 import type { Zone } from '@/lib/types';
-import { Toggle } from './toggle';
+import { ReadOnlyNote, ZoneHeader } from './zone-shell';
+
+/** The website's Security page. */
+export function ZoneSecurity({ zone }: { zone: Zone }) {
+  const { canWrite } = useZonePermissions();
+  return (
+    <div>
+      <ZoneHeader
+        zone={zone}
+        section="Security"
+        description="Control who can fetch content from this website."
+        actions={!canWrite ? <ReadOnlyNote /> : undefined}
+      />
+      <SectionTitle>Signed URLs</SectionTitle>
+      <ZoneSignedUrls zone={zone} />
+    </div>
+  );
+}
 
 /** Signed URL settings for a website, as console setting rows. */
 export function ZoneSignedUrls({ zone }: { zone: Zone }) {
   const { canWrite } = useZonePermissions();
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const toast = useToast();
   const updateZone = useUpdateZone(zone.id);
   const rotate = useRotateSigningSecret(zone.id);
 
   async function handleToggle(next: boolean) {
-    setError(null);
-    setNotice(null);
     try {
       await updateZone.mutateAsync({ signedUrlsRequired: next });
+      toast.success(
+        next ? 'Signed URLs required' : 'Signed URLs no longer required',
+        next ? 'Requests without a valid signature are now refused.' : 'Anyone with a link can fetch content again.',
+      );
     } catch (err) {
-      setError(errorMessage(err, 'Could not update the signed URL setting. Try again.'));
-    }
-  }
-
-  async function handleRotate() {
-    setError(null);
-    setNotice(null);
-    try {
-      await rotate.mutateAsync();
-      setConfirmOpen(false);
-      setNotice('Signing secret rotated. Previously shared links no longer work.');
-    } catch (err) {
-      setConfirmOpen(false);
-      setError(errorMessage(err, 'Could not rotate the signing secret. Try again.'));
+      toast.error('Could not update the signed URL setting', errorMessage(err, 'Try again in a moment.'));
     }
   }
 
@@ -65,11 +63,12 @@ export function ZoneSignedUrls({ zone }: { zone: Zone }) {
       >
         <div className="flex items-center gap-3 md:justify-end">
           <span className="text-[13px] text-muted-foreground">{zone.signedUrlsRequired ? 'On' : 'Off'}</span>
-          <Toggle
+          <Switch
             label="Require signed URLs"
             checked={zone.signedUrlsRequired}
-            onChange={handleToggle}
-            disabled={!canWrite || updateZone.isPending}
+            onCheckedChange={(next) => void handleToggle(next)}
+            disabled={!canWrite}
+            loading={updateZone.isPending}
           />
         </div>
       </SettingRow>
@@ -79,43 +78,31 @@ export function ZoneSignedUrls({ zone }: { zone: Zone }) {
           title="Rotate signing secret"
           description="Replace the secret used to sign links. Every signed link already shared for this website stops working immediately."
         >
-          {canWrite ? (
+          {canWrite && (
             <div className="flex md:justify-end">
-              <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline">Rotate signing secret</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Rotate the signing secret?</DialogTitle>
-                    <DialogDescription>
-                      Existing signed links for {zone.name} stop working right away. You will need to create and share new
-                      links.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button variant="destructive" onClick={handleRotate} disabled={rotate.isPending}>
-                      {rotate.isPending ? 'Rotating…' : 'Rotate secret'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <ConfirmDialog
+                trigger={
+                  <Button variant="secondary" leftIcon={<RefreshCw />}>
+                    Rotate signing secret
+                  </Button>
+                }
+                tone="destructive"
+                title="Rotate signing secret"
+                description={
+                  <>
+                    Existing signed links for <b className="font-semibold text-foreground">{zone.name}</b> stop working right
+                    away. You will need to create and share new links.
+                  </>
+                }
+                confirmLabel="Rotate secret"
+                successToast={{ title: 'Signing secret rotated', description: 'Previously shared links no longer work.' }}
+                errorFallback="Could not rotate the signing secret. Try again."
+                onConfirm={() => rotate.mutateAsync()}
+              />
             </div>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">Your role cannot rotate the secret.</p>
           )}
         </SettingRow>
       )}
-
-      {notice && (
-        <p role="status" className="text-[13px] text-muted-foreground">
-          {notice}
-        </p>
-      )}
-      {error && <ErrorBanner>{error}</ErrorBanner>}
     </div>
   );
 }

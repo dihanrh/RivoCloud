@@ -15,7 +15,7 @@ describe('ZoneGate', () => {
   it('shows a not found state for an unknown website', async () => {
     mockApi([{ url: '/api/zones/missing', status: 404, body: { message: 'Zone not found' } }]);
     renderWithClient(<ZoneGate zoneId="missing">{() => <p>never</p>}</ZoneGate>);
-    expect(await screen.findByText('Website not found')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Website not found' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to websites' })).toHaveAttribute('href', '/zones');
   });
 
@@ -23,5 +23,6 @@ describe('ZoneGate', () => {
     mockApi([{ url: '/api/zones/zone-1', status: 500, body: { message: 'boom' } }]);
     renderWithClient(<ZoneGate zoneId="zone-1">{() => <p>never</p>}</ZoneGate>);
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not load this website/i);
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });

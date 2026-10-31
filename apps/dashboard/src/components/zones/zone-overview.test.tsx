@@ -34,6 +34,7 @@ describe('ZoneOverview', () => {
 
     expect(await screen.findByText('12,345')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Purge everything' })).not.toBeInTheDocument();
+    expect(screen.getByText('View only')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /caching/i })).toHaveAttribute('href', '/zones/abcdef12-0000/caching');
   });
 });

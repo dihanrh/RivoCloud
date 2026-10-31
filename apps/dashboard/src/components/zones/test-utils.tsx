@@ -2,6 +2,8 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from '@/components/ui/toast';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { OrgRole, Zone } from '@/lib/types';
 
 export interface MockRoute {
@@ -45,7 +47,13 @@ export function apiCalls(fetchMock: ReturnType<typeof mockApi>, method?: string)
 
 export function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <TooltipProvider>{ui}</TooltipProvider>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
 }
 
 export function makeZone(overrides: Partial<Zone> = {}): Zone {

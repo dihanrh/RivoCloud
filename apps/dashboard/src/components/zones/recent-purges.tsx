@@ -2,13 +2,12 @@
 
 import { History } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { EmptyState, ErrorBanner } from '@/components/ui/empty-state';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { EmptyState } from '@/components/ui/empty-state';
+import { RelativeTime } from '@/components/ui/relative-time';
 import { useInvalidations } from '@/hooks/use-cache-purge';
+import { formatNumber } from '@/lib/format';
 import type { CacheInvalidation } from '@/lib/types';
-import { formatDateTime } from './format';
 
 const STATUS: Record<string, { label: string; variant: 'warning' | 'success' | 'destructive' }> = {
   pending: { label: 'In progress', variant: 'warning' },
@@ -39,46 +38,55 @@ function describeTarget(inv: CacheInvalidation): React.ReactNode {
   );
 }
 
+const columns: DataTableColumn<CacheInvalidation>[] = [
+  { id: 'target', header: 'Purged', className: 'min-w-48', cell: describeTarget },
+  {
+    id: 'status',
+    header: 'Status',
+    cell: (inv) => {
+      const status = STATUS[inv.status] ?? { label: inv.status, variant: 'warning' as const };
+      return <Badge variant={status.variant}>{status.label}</Badge>;
+    },
+  },
+  {
+    id: 'keys',
+    header: 'Keys purged',
+    align: 'right',
+    hideBelow: 'md',
+    className: 'tabular-nums',
+    cell: (inv) => formatNumber(inv.keysPurged),
+  },
+  {
+    id: 'edges',
+    header: 'Edges notified',
+    align: 'right',
+    hideBelow: 'md',
+    className: 'tabular-nums',
+    cell: (inv) => formatNumber(inv.edgesNotified),
+  },
+  {
+    id: 'requested',
+    header: 'Requested',
+    align: 'right',
+    className: 'whitespace-nowrap text-muted-foreground',
+    cell: (inv) => <RelativeTime value={inv.createdAt} />,
+  },
+];
+
 export function RecentPurges({ zoneId }: { zoneId: string }) {
-  const { data, isLoading, error } = useInvalidations(zoneId);
+  const { data, isLoading, error, refetch } = useInvalidations(zoneId);
 
-  if (isLoading) return <Skeleton className="h-32 w-full" />;
-  if (error) return <ErrorBanner>Could not load recent purges. Refresh the page to try again.</ErrorBanner>;
-
-  const invalidations = data?.invalidations ?? [];
   return (
-    <Card>
-      {invalidations.length === 0 ? (
-        <EmptyState icon={History} title="No purges yet" description="Purges you run on this website appear here." />
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Purged</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Keys purged</TableHead>
-              <TableHead className="text-right">Edges notified</TableHead>
-              <TableHead>Requested</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invalidations.map((inv) => {
-              const status = STATUS[inv.status] ?? { label: inv.status, variant: 'warning' as const };
-              return (
-                <TableRow key={inv.id}>
-                  <TableCell className="min-w-48">{describeTarget(inv)}</TableCell>
-                  <TableCell>
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{inv.keysPurged ?? '—'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{inv.edgesNotified ?? '—'}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(inv.createdAt)}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
-    </Card>
+    <DataTable
+      aria-label="Recent purges"
+      columns={columns}
+      rows={data?.invalidations}
+      getRowKey={(inv) => inv.id}
+      loading={isLoading}
+      skeletonRows={3}
+      error={error ? 'Could not load recent purges.' : null}
+      onRetry={() => void refetch()}
+      empty={<EmptyState className="py-8" icon={History} title="No purges yet" description="Purges you run on this website appear here." />}
+    />
   );
 }

@@ -1,34 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { Link2, Plus } from 'lucide-react';
+import { Copy, Link2, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CopyButton } from '@/components/ui/copy-button';
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import {
   Dialog,
+  DialogBody,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogForm,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { MenuItem, MenuSeparator } from '@/components/ui/dropdown-menu';
 import { EmptyState, ErrorBanner } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { SectionTitle } from '@/components/ui/page-header';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { createDomainSchema } from '@/lib/validation';
-import { useDomains } from '@/hooks/use-domains';
+import { RelativeTime } from '@/components/ui/relative-time';
+import { useToast } from '@/components/ui/toast';
 import { useCreateDomain } from '@/hooks/use-create-domain';
 import { useDeleteDomain } from '@/hooks/use-delete-domain';
+import { useDomains } from '@/hooks/use-domains';
 import { useVerifyDomain } from '@/hooks/use-verify-domain';
 import { useZonePermissions } from '@/hooks/use-zone-permissions';
+import { formatDate } from '@/lib/format';
 import { errorMessage } from '@/lib/http';
-import type { ZoneDomain } from '@/lib/types';
-import { CopyButton } from './copy-button';
+import type { Zone, ZoneDomain } from '@/lib/types';
+import { createDomainSchema } from '@/lib/validation';
+import { copyToClipboard } from './menu-helpers';
+import { ZoneRowMenu } from './row-menu';
+import { ReadOnlyNote, ZoneHeader } from './zone-shell';
 
 export const SSL_STATUS: Record<ZoneDomain['sslStatus'], { label: string; variant: 'warning' | 'success' | 'destructive' }> = {
   pending_dns: { label: 'Waiting for DNS', variant: 'warning' },
@@ -37,34 +47,106 @@ export const SSL_STATUS: Record<ZoneDomain['sslStatus'], { label: string; varian
   error: { label: 'Error', variant: 'destructive' },
 };
 
-/** Custom domains for a website: CNAME instructions, list, add, verify, remove. */
-export function ZoneDomains({ zoneId }: { zoneId: string }) {
-  const { data: domains, isLoading, error } = useDomains(zoneId);
+/** The website's Custom domains page: CNAME instructions, list, add, verify, delete. */
+export function ZoneDomains({ zone }: { zone: Zone }) {
+  const zoneId = zone.id;
+  const { data: domains, isLoading, error, refetch } = useDomains(zoneId);
   const { canWrite, canDelete } = useZonePermissions();
+  const toast = useToast();
   const verifyDomain = useVerifyDomain(zoneId);
   const deleteDomain = useDeleteDomain(zoneId);
   const [removing, setRemoving] = useState<ZoneDomain | undefined>();
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
 
   const cnameTarget = domains?.[0]?.cnameTarget;
 
   async function verify(domain: ZoneDomain) {
-    setActionError(null);
+    const id = toast.info(`Checking ${domain.domain}…`, undefined, {
+      duration: Infinity,
+    });
     try {
-      await verifyDomain.mutateAsync(domain.id);
+      const result = await verifyDomain.mutateAsync(domain.id);
+      toast.dismiss(id);
+      const status = result?.sslStatus ?? domain.sslStatus;
+      if (status === 'pending_dns') {
+        toast.info(
+          'DNS record not found yet',
+          `Point a CNAME for ${domain.domain} at ${domain.cnameTarget}. Changes can take a few minutes to spread.`,
+        );
+      } else if (status === 'error') {
+        toast.error(`Could not verify ${domain.domain}`, result?.sslError ?? 'The certificate could not be issued.');
+      } else {
+        toast.success(
+          'Domain verified',
+          status === 'active' ? `${domain.domain} is live.` : `Issuing a certificate for ${domain.domain}.`,
+        );
+      }
     } catch (err) {
-      setActionError(errorMessage(err, `Could not check ${domain.domain}. Try again in a minute.`));
+      toast.dismiss(id);
+      toast.error(`Could not check ${domain.domain}`, errorMessage(err, 'Try again in a minute.'));
     }
   }
 
+  const columns: DataTableColumn<ZoneDomain>[] = [
+    {
+      id: 'domain',
+      header: 'Domain',
+      className: 'min-w-48',
+      cell: (d) => (
+        <div className="flex flex-col">
+          <span className="font-semibold">{d.domain}</span>
+          {d.sslStatus === 'error' && d.sslError && <span className="mt-0.5 text-xs text-destructive">{d.sslError}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Certificate',
+      cell: (d) => {
+        const status = SSL_STATUS[d.sslStatus] ?? {
+          label: d.sslStatus,
+          variant: 'warning' as const,
+        };
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <Badge variant={status.variant}>{status.label}</Badge>
+            {d.sslStatus === 'active' && d.certExpiresAt && (
+              <span className="text-xs text-muted-foreground">Renews before {formatDate(d.certExpiresAt)}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'cname',
+      header: 'CNAME target',
+      hideBelow: 'md',
+      cell: (d) => <span className="break-all font-mono text-xs">{d.cnameTarget}</span>,
+    },
+    {
+      id: 'added',
+      header: 'Added',
+      hideBelow: 'lg',
+      className: 'whitespace-nowrap text-muted-foreground',
+      cell: (d) => <RelativeTime value={d.createdAt} />,
+    },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
+    <div>
+      <ZoneHeader
+        zone={zone}
+        section="Custom domains"
+        description="Serve this website from hostnames you own. Certificates are issued and renewed automatically."
+        actions={canWrite ? <AddDomainDialog zoneId={zoneId} /> : !canDelete ? <ReadOnlyNote /> : undefined}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Point your domain at the edge</CardTitle>
           <CardDescription>
-            At your DNS provider, create a CNAME record for each custom domain. Then select Check DNS. We issue a TLS
-            certificate as soon as the record resolves.
+            At your DNS provider, create a CNAME record for each custom domain, then choose Verify now from its menu. We issue a
+            TLS certificate as soon as the record resolves.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -92,194 +174,171 @@ export function ZoneDomains({ zoneId }: { zoneId: string }) {
         </CardContent>
       </Card>
 
-      <section>
-        <SectionTitle actions={canWrite ? <AddDomainDialog zoneId={zoneId} /> : undefined}>Custom domains</SectionTitle>
-        {actionError && (
-          <div className="mb-3">
-            <ErrorBanner>{actionError}</ErrorBanner>
-          </div>
-        )}
-        {isLoading ? (
-          <Skeleton className="h-32 w-full" />
-        ) : error ? (
-          <ErrorBanner>Could not load custom domains. Refresh the page to try again.</ErrorBanner>
-        ) : (
-          <Card>
-            {!domains?.length ? (
-              <EmptyState
-                icon={Link2}
-                title="No custom domains yet"
-                description="Serve this website from a hostname you own, such as cdn.your-company.com."
-              />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Certificate</TableHead>
-                    <TableHead>CNAME target</TableHead>
-                    {(canWrite || canDelete) && (
-                      <TableHead>
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {domains.map((d) => {
-                    const status = SSL_STATUS[d.sslStatus] ?? { label: d.sslStatus, variant: 'warning' as const };
-                    return (
-                      <TableRow key={d.id}>
-                        <TableCell className="min-w-48">
-                          <span className="font-medium">{d.domain}</span>
-                          {d.sslStatus === 'error' && d.sslError && (
-                            <p className="mt-0.5 text-xs text-destructive">{d.sslError}</p>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={status.variant}>{status.label}</Badge>
-                          {d.sslStatus === 'active' && d.certExpiresAt && (
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              Renews before {new Date(d.certExpiresAt).toLocaleDateString()}
-                            </p>
-                          )}
-                        </TableCell>
-                        <TableCell className="break-all font-mono text-xs">{d.cnameTarget}</TableCell>
-                        {(canWrite || canDelete) && (
-                          <TableCell>
-                            <div className="flex justify-end gap-2">
-                              {canWrite && d.sslStatus !== 'active' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => verify(d)}
-                                  disabled={verifyDomain.isPending}
-                                  aria-label={`Check DNS for ${d.domain}`}
-                                >
-                                  Check DNS
-                                </Button>
-                              )}
-                              {canDelete && (
-                                <Button variant="ghost" size="sm" onClick={() => setRemoving(d)} aria-label={`Remove ${d.domain}`}>
-                                  Remove
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+      <SectionTitle>Domains</SectionTitle>
+      <DataTable
+        aria-label="Custom domains"
+        columns={columns}
+        rows={domains}
+        getRowKey={(d) => d.id}
+        loading={isLoading}
+        skeletonRows={3}
+        error={error ? 'Could not load custom domains.' : null}
+        onRetry={() => void refetch()}
+        empty={
+          <EmptyState
+            className="py-8"
+            icon={Link2}
+            title="No custom domains yet"
+            description="Serve this website from a hostname you own, such as cdn.your-company.com."
+            action={canWrite ? <AddDomainDialog zoneId={zoneId} variant="secondary" /> : undefined}
+          />
+        }
+        rowActions={(d) => (
+          <ZoneRowMenu label={`Actions for ${d.domain}`}>
+            {(openOverlay) => (
+              <>
+                {canWrite && (
+                  <MenuItem icon={<RefreshCw />} disabled={verifyDomain.isPending} onSelect={() => void verify(d)}>
+                    Verify now
+                  </MenuItem>
+                )}
+                <MenuItem
+                  icon={<Copy />}
+                  onSelect={() =>
+                    void copyToClipboard(d.cnameTarget, toast, {
+                      success: 'CNAME target copied',
+                      description: d.cnameTarget,
+                    })
+                  }
+                >
+                  Copy CNAME target
+                </MenuItem>
+                {canDelete && (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem
+                      icon={<Trash2 />}
+                      tone="destructive"
+                      onSelect={() => {
+                        setRemoving(d);
+                        openOverlay(() => setRemoveOpen(true));
+                      }}
+                    >
+                      Delete…
+                    </MenuItem>
+                  </>
+                )}
+              </>
             )}
-          </Card>
+          </ZoneRowMenu>
         )}
-      </section>
+      />
 
-      <Dialog
-        open={Boolean(removing)}
-        onOpenChange={(next) => {
-          if (!next) setRemoving(undefined);
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        tone="destructive"
+        title="Delete domain"
+        description={
+          <>
+            The edge stops serving this website on <b className="font-semibold text-foreground">{removing?.domain}</b> and its
+            certificate is no longer renewed. Remove the CNAME record at your DNS provider too.
+          </>
+        }
+        confirmLabel="Delete domain"
+        successToast={{
+          title: 'Domain deleted',
+          description: removing?.domain,
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove {removing?.domain}?</DialogTitle>
-            <DialogDescription>
-              The edge stops serving this website on {removing?.domain} and its certificate is no longer renewed. Remove the
-              CNAME record at your DNS provider too.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRemoving(undefined)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleteDomain.isPending}
-              onClick={async () => {
-                if (!removing) return;
-                setActionError(null);
-                try {
-                  await deleteDomain.mutateAsync(removing.id);
-                } catch (err) {
-                  setActionError(errorMessage(err, `Could not remove ${removing.domain}.`));
-                }
-                setRemoving(undefined);
-              }}
-            >
-              {deleteDomain.isPending ? 'Removing…' : 'Remove domain'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        errorFallback="Could not delete the domain."
+        onConfirm={async () => {
+          if (removing) await deleteDomain.mutateAsync(removing.id);
+        }}
+      />
     </div>
   );
 }
 
-function AddDomainDialog({ zoneId }: { zoneId: string }) {
+function AddDomainDialog({ zoneId, variant = 'default' }: { zoneId: string; variant?: 'default' | 'secondary' }) {
   const createDomain = useCreateDomain(zoneId);
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [domain, setDomain] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
+    if (!next && createDomain.isPending) return;
     setOpen(next);
     if (!next) {
       setDomain('');
       setError(null);
+      setFormError(null);
     }
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    const parsed = createDomainSchema.safeParse({ domain: domain.trim().toLowerCase() });
+    setFormError(null);
+    const parsed = createDomainSchema.safeParse({
+      domain: domain.trim().toLowerCase(),
+    });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Enter a valid hostname.');
       return;
     }
+    setError(null);
     try {
       await createDomain.mutateAsync(parsed.data);
+      toast.success('Domain added', `Point a CNAME record for ${parsed.data.domain} at the edge, then verify it.`);
       handleOpenChange(false);
     } catch (err) {
-      setError(errorMessage(err, 'Could not add the domain.'));
+      setFormError(errorMessage(err, 'Could not add the domain.'));
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus /> Add domain
+        <Button variant={variant} size={variant === 'secondary' ? 'sm' : 'default'} leftIcon={<Plus />}>
+          Add domain
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add a custom domain</DialogTitle>
-          <DialogDescription>Enter a hostname you control. You will point it at the edge with a CNAME record.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-domain">Domain</Label>
-            <Input
-              id="new-domain"
-              placeholder="cdn.your-company.com"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-            />
-          </div>
-          {error && <ErrorBanner>{error}</ErrorBanner>}
+      <DialogContent preventClose={createDomain.isPending}>
+        <DialogForm onSubmit={handleSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>Add domain</DialogTitle>
+            <DialogDescription>
+              Enter a hostname you control. You will point it at the edge with a CNAME record.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Field label="Domain" error={error} hint="A subdomain such as cdn.your-company.com works best.">
+              <Input
+                placeholder="cdn.your-company.com"
+                value={domain}
+                autoFocus
+                autoComplete="off"
+                onChange={(e) => {
+                  setDomain(e.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={createDomain.isPending}
+              />
+            </Field>
+            {formError && <ErrorBanner>{formError}</ErrorBanner>}
+          </DialogBody>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createDomain.isPending}>
-              {createDomain.isPending ? 'Adding…' : 'Add domain'}
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" disabled={createDomain.isPending}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" loading={createDomain.isPending}>
+              Add domain
             </Button>
           </DialogFooter>
-        </form>
+        </DialogForm>
       </DialogContent>
     </Dialog>
   );

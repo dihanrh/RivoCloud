@@ -2,28 +2,38 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { BarChart3, ChevronRight, Link2, Settings, ShieldCheck, Zap, type LucideIcon } from 'lucide-react';
 import { StatusDot } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { RelativeTime } from '@/components/ui/relative-time';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalyticsOverview } from '@/hooks/use-analytics';
 import { useDomains } from '@/hooks/use-domains';
 import { useZonePermissions } from '@/hooks/use-zone-permissions';
-import { formatBytes } from '@/lib/format-bytes';
-import type { CacheInvalidationResult, Zone } from '@/lib/types';
-import { ORIGIN_PROTOCOL_LABEL, formatDate, formatTtl } from './format';
-import { PurgeConfirmation, PurgeEverythingButton } from './purge-cache';
-import { EdgeHostname, ZoneHeader } from './zone-shell';
+import { formatBytes, formatNumber, formatPercent } from '@/lib/format';
+import type { Zone } from '@/lib/types';
+import { ORIGIN_PROTOCOL_LABEL, formatTtl } from './format';
+import { PurgeEverythingButton } from './purge-cache';
+import { EdgeHostname, ReadOnlyNote, ZoneHeader } from './zone-shell';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function ZoneOverview({ zone }: { zone: Zone }) {
-  const { canPurge } = useZonePermissions();
-  const [purged, setPurged] = useState<CacheInvalidationResult | null>(null);
+  const { canPurge, canWrite } = useZonePermissions();
 
   return (
     <div>
-      <ZoneHeader zone={zone} description={<EdgeHostname zone={zone} />} />
+      <ZoneHeader
+        zone={zone}
+        description={<EdgeHostname zone={zone} />}
+        actions={
+          canPurge ? (
+            <PurgeEverythingButton zoneId={zone.id} zoneName={zone.name} />
+          ) : !canWrite ? (
+            <ReadOnlyNote />
+          ) : undefined
+        }
+      />
 
       <QuickStats zoneId={zone.id} />
 
@@ -31,39 +41,36 @@ export function ZoneOverview({ zone }: { zone: Zone }) {
         <Summary zone={zone} />
 
         <Card className="self-start">
-          <CardHeader>
-            <CardTitle>Quick actions</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle>Configure</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {canPurge && (
-              <div className="flex flex-col gap-2">
-                <p className="text-[13px] text-muted-foreground">Clear every cached file for this website from the edge.</p>
-                <div>
-                  <PurgeEverythingButton zoneId={zone.id} zoneName={zone.name} onPurged={setPurged} />
-                </div>
-                {purged && <PurgeConfirmation result={purged} />}
-              </div>
-            )}
-            <nav aria-label="Website sections" className="-mx-2 flex flex-col">
-              <QuickLink href={`/zones/${zone.id}/caching`} label="Caching" hint="Purge, cache rules, and TTLs" />
-              <QuickLink href={`/zones/${zone.id}/domains`} label="Custom domains" hint="Serve from your own hostname" />
-              <QuickLink href={`/zones/${zone.id}/security`} label="Security" hint="Signed URLs" />
-            </nav>
-          </CardContent>
+          <nav aria-label="Website sections" className="flex flex-col px-2 pb-2">
+            <QuickLink icon={BarChart3} href={`/zones/${zone.id}/analytics`} label="Analytics" hint="Traffic, cache ratio, and latency" />
+            <QuickLink icon={Zap} href={`/zones/${zone.id}/caching`} label="Caching" hint="Purge, cache rules, and TTLs" />
+            <QuickLink icon={Link2} href={`/zones/${zone.id}/domains`} label="Custom domains" hint="Serve from your own hostname" />
+            <QuickLink icon={ShieldCheck} href={`/zones/${zone.id}/security`} label="Security" hint="Signed URLs" />
+            <QuickLink icon={Settings} href={`/zones/${zone.id}/settings`} label="Settings" hint="Name, origin, pause, delete" />
+          </nav>
         </Card>
       </div>
     </div>
   );
 }
 
-function QuickLink({ href, label, hint }: { href: string; label: string; hint: string }) {
+function QuickLink({ icon: Icon, href, label, hint }: { icon: LucideIcon; href: string; label: string; hint: string }) {
   return (
-    <Link href={href} className="flex items-center justify-between gap-2 rounded px-2 py-2 hover:bg-muted">
-      <span>
-        <span className="block text-[13px] font-medium text-primary">{label}</span>
-        <span className="block text-xs text-muted-foreground">{hint}</span>
+    <Link
+      href={href}
+      className="group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
+        <Icon className="h-4 w-4" aria-hidden />
       </span>
-      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium text-foreground group-hover:text-primary">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
     </Link>
   );
 }
@@ -77,9 +84,9 @@ function QuickStats({ zoneId }: { zoneId: string }) {
   const { data, isLoading, error } = useAnalyticsOverview({ zoneId, ...range });
 
   const stats = [
-    { label: 'Requests', value: data ? data.requests.toLocaleString() : '—' },
-    { label: 'Bandwidth', value: data ? formatBytes(String(Math.round(data.bytesSent))) : '—' },
-    { label: 'Cache hit ratio', value: data ? `${Math.round(data.hitRatio * 1000) / 10}%` : '—' },
+    { label: 'Requests', value: data ? formatNumber(data.requests) : '—' },
+    { label: 'Bandwidth', value: data ? formatBytes(Math.round(data.bytesSent)) : '—' },
+    { label: 'Cache hit ratio', value: data ? formatPercent(data.hitRatio) : '—' },
   ];
 
   return (
@@ -126,22 +133,25 @@ function Summary({ zone }: { zone: Zone }) {
         <Skeleton className="h-4 w-8" />
       ) : (
         <Link href={`/zones/${zone.id}/domains`} className="text-primary hover:underline">
-          {domains?.length ?? 0}
+          {formatNumber(domains?.length ?? 0)}
         </Link>
       ),
     },
     { label: 'Signed URLs', value: zone.signedUrlsRequired ? 'Required' : 'Not required' },
-    { label: 'Created', value: formatDate(zone.createdAt) },
+    { label: 'Created', value: <RelativeTime value={zone.createdAt} /> },
   ];
 
   return (
     <Card className="self-start">
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle>Summary</CardTitle>
       </CardHeader>
       <dl className="border-t border-border">
         {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-4 border-b border-border px-5 py-2.5 text-[13px] last:border-0">
+          <div
+            key={row.label}
+            className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-4 border-b border-border px-5 py-2.5 text-[13px] last:border-0 sm:grid-cols-[10rem_minmax(0,1fr)]"
+          >
             <dt className="text-muted-foreground">{row.label}</dt>
             <dd>{row.value}</dd>
           </div>

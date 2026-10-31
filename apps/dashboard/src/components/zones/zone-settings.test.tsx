@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ZoneSettings } from './zone-settings';
 import { apiCalls, makeZone, mockApi, renderWithClient } from './test-utils';
@@ -20,17 +20,19 @@ describe('ZoneSettings', () => {
     renderWithClient(<ZoneSettings zone={zone} />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Delete website' }));
-    const confirm = screen.getAllByRole('button', { name: 'Delete website' }).at(-1)!;
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Delete website' });
     expect(confirm).toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText(/website name/i, { selector: '#delete-confirm' }), 'my-blo');
+    await userEvent.type(within(dialog).getByRole('textbox'), 'my-blo');
     expect(confirm).toBeDisabled();
-    await userEvent.type(screen.getByLabelText(/website name/i, { selector: '#delete-confirm' }), 'g');
+    await userEvent.type(within(dialog).getByRole('textbox'), 'g');
     expect(confirm).toBeEnabled();
     await userEvent.click(confirm);
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/zones'));
     expect(apiCalls(fetchMock, 'DELETE').map(([url]) => url)).toEqual(['/api/zones/zone-1']);
+    expect(await screen.findByText('Website deleted')).toBeInTheDocument();
   });
 
   it('saves the origin URL and protocol together', async () => {
@@ -50,6 +52,7 @@ describe('ZoneSettings', () => {
       originUrl: 'https://new.example.com',
       originProtocol: 'match',
     });
+    expect(await screen.findByText('Origin saved')).toBeInTheDocument();
   });
 
   it('pauses the website through the enabled flag', async () => {
@@ -62,13 +65,32 @@ describe('ZoneSettings', () => {
 
     await vi.waitFor(() => expect(apiCalls(fetchMock, 'PATCH')).toHaveLength(1));
     expect(JSON.parse(String(apiCalls(fetchMock, 'PATCH')[0][1]?.body))).toEqual({ enabled: false });
+    expect(await screen.findByText('Website paused')).toBeInTheDocument();
+  });
+
+  it('shows an inline error for an invalid origin and toasts a failed rename', async () => {
+    mockApi([{ method: 'PATCH', url: '/api/zones/zone-1', status: 409, body: { message: 'Name taken' } }]);
+    renderWithClient(<ZoneSettings zone={zone} />);
+
+    const origin = await screen.findByLabelText('Origin URL');
+    await vi.waitFor(() => expect(origin).toBeEnabled());
+    await userEvent.clear(origin);
+    await userEvent.type(origin, 'not a url');
+    await userEvent.click(screen.getByRole('button', { name: 'Save origin' }));
+    expect(origin).toHaveAttribute('aria-invalid', 'true');
+
+    const name = screen.getByRole('textbox', { name: 'Website name' });
+    await userEvent.type(name, '-2');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Could not rename the website')).toBeInTheDocument();
+    expect(screen.getByText('Name taken')).toBeInTheDocument();
   });
 
   it('gives a viewer no way to change or delete the website', async () => {
     mockApi([], 'viewer');
     renderWithClient(<ZoneSettings zone={zone} />);
 
-    expect(await screen.findByText(/read-only access/i)).toBeInTheDocument();
+    expect(await screen.findByText(/view only/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save|delete/i })).not.toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Pause website' })).toBeDisabled();
     expect(screen.getByLabelText('Origin URL')).toBeDisabled();
