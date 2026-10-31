@@ -15,6 +15,22 @@ export async function backendFetch(
 ): Promise<unknown> {
   const { accessToken, headers, ...rest } = init;
 
+  // Read directly (not via ./env) so this stays independent of env parsing.
+  if (process.env.RIVO_DEMO_BACKEND === 'mock') {
+    // Demo deployments (RIVO_DEMO_BACKEND=mock) answer every backend call from
+    // an in-memory store with the same response and error shapes. Loaded
+    // lazily so normal deployments never pull it in.
+    const { handleDemoRequest } = await import('./demo-backend');
+    const result = await handleDemoRequest(baseUrl, path, {
+      method: rest.method,
+      body: typeof rest.body === 'string' ? rest.body : undefined,
+      accessToken,
+      headers: headers as Record<string, string> | undefined,
+    });
+    if (result.status >= 400) throw new BackendError(result.status, result.body);
+    return result.body;
+  }
+
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {

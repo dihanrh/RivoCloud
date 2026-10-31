@@ -7,6 +7,7 @@
  * ToastProvider + TooltipProvider.
  */
 import { CommandPalette } from '@/components/command/command-palette';
+import { DemoBanner } from './demo-banner';
 import { KeyboardShortcutsDialog, useGlobalShortcuts } from './keyboard-shortcuts';
 import { RouteProgress } from './route-progress';
 import { ShellProvider } from './shell-context';
@@ -36,7 +37,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
       <div className="flex">
         <Sidebar />
         <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1200px]"><DemoBanner />{children}</div>
         </main>
       </div>
       <CommandPalette />

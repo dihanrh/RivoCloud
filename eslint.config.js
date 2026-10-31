@@ -13,6 +13,8 @@ export default tseslint.config(
       '**/generated/**',
       '**/.turbo/**',
       '**/.next/**',
+      // Alternate Next dist dirs (NEXT_DIST_DIR) used for side-by-side production builds.
+      '**/.next-*/**',
       '**/next-env.d.ts',
     ],
   },
