@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useTourCommand } from './tour/tour-bus';
 
 type Metric = 'requests' | 'bandwidth' | 'hit';
 type Range = '24h' | '7d' | '30d';
@@ -78,6 +79,11 @@ export function PerformanceChart() {
   const [range, setRange] = useState<Range>('24h');
   const [hover, setHover] = useState<number | null>(null);
 
+  useTourCommand('metric', (next) => {
+    setMetric(next);
+    setHover(null);
+  });
+
   const data = useMemo(() => series(metric, range), [metric, range]);
   const isHit = metric === 'hit';
   const step = isHit ? 3 : niceStep((Math.max(...data) * 1.05) / 4);
@@ -130,7 +136,7 @@ export function PerformanceChart() {
   const tipLeft = tipX > W * 0.7;
 
   return (
-    <div className="rounded-3xl border border-border bg-background p-4 shadow-[0_24px_60px_-36px_rgba(29,32,37,0.35)] sm:p-6">
+    <div data-tour="performance" className="rounded-3xl border border-border bg-background p-4 shadow-[0_24px_60px_-36px_rgba(29,32,37,0.35)] sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div role="radiogroup" aria-label="Metric" className="inline-flex w-full rounded-lg bg-muted p-1 sm:w-auto">
           {METRICS.map((m) => (

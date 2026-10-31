@@ -11,6 +11,7 @@ import {
   StorageMockup,
   TeamsMockup,
 } from './illustrations/feature-mockups';
+import { useTourCommand } from './tour/tour-bus';
 
 export const FEATURES = [
   {
@@ -104,6 +105,19 @@ export function FeatureTabs() {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const baseId = useId();
 
+  useTourCommand('products', (id) => {
+    const index = FEATURES.findIndex((feature) => feature.id === id);
+    if (index < 0) return;
+    setActive(index);
+    // Keep the selected pill visible in the horizontally scrolling strip on phones.
+    const tab = tabRefs.current[index];
+    const list = tab?.parentElement;
+    if (tab && list && list.scrollWidth > list.clientWidth) {
+      const offset = tab.getBoundingClientRect().left - list.getBoundingClientRect().left - 16;
+      list.scrollLeft += offset;
+    }
+  });
+
   const select = (index: number) => {
     const next = (index + FEATURES.length) % FEATURES.length;
     setActive(next);
@@ -134,11 +148,12 @@ export function FeatureTabs() {
   };
 
   return (
-    <div className="mt-10 sm:mt-12">
+    <div className="mt-10 sm:mt-12" data-tour="products-panel">
       <div
         role="tablist"
         aria-label="Products"
         aria-orientation="horizontal"
+        data-tour="products-tabs"
         className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden"
       >
         {FEATURES.map((feature, index) => {

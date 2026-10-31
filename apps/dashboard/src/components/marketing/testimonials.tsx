@@ -37,7 +37,7 @@ export function Testimonials() {
           kicker="Customers"
           title="Teams ship faster with RivoCloud"
         />
-        <ul className="mt-12 grid gap-6 lg:grid-cols-3">
+        <ul data-tour="testimonials" className="mt-12 grid gap-6 lg:grid-cols-3">
           {QUOTES.map((item) => (
             <li key={item.name} className="flex">
               <figure className="flex flex-col justify-between rounded-3xl border border-border bg-background p-7">

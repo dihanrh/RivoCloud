@@ -66,9 +66,9 @@ export function UseCases() {
           title="How teams use RivoCloud"
           lede="The same three building blocks, put together in different ways. Here is how four kinds of teams set it up."
         />
-        <ul className="mt-12 grid gap-6 md:grid-cols-2">
+        <ul data-tour="use-cases" className="mt-12 grid gap-6 md:grid-cols-2">
           {CASES.map(({ title, who, body, Art, tint, steps }) => (
-            <li key={title} className="flex flex-col overflow-hidden rounded-3xl border border-border bg-background">
+            <li key={title} data-tour="use-case" className="flex flex-col overflow-hidden rounded-3xl border border-border bg-background">
               <div className={`bg-gradient-to-br ${tint} to-white px-6 pt-6 pb-2 sm:px-10`}>
                 <Art />
               </div>

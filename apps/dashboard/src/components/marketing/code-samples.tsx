@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTourCommand } from './tour/tour-bus';
 
 type Lang = 'curl' | 'js' | 'cli';
 type Task = 'create' | 'purge' | 'upload';
@@ -124,6 +125,8 @@ export function CodeSamples() {
   const baseId = useId();
   const code = SNIPPETS[lang][task];
 
+  useTourCommand('code', (next) => setLang(next));
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -147,7 +150,7 @@ export function CodeSamples() {
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#14161b] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.8)]">
+    <div data-tour="code-samples" className="overflow-hidden rounded-2xl border border-white/10 bg-[#14161b] shadow-[0_40px_80px_-40px_rgba(0,0,0,0.8)]">
       <div className="flex items-center gap-2 border-b border-white/10 px-3 sm:px-4">
         <div role="tablist" aria-label="Language" className="flex min-w-0 gap-1 overflow-x-auto">
           {LANGS.map((item, index) => {

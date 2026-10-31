@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTourCommand } from './tour/tour-bus';
 
 export const FAQS = [
   {
@@ -39,8 +40,10 @@ export function Faq() {
   const [open, setOpen] = useState<number | null>(0);
   const baseId = useId();
 
+  useTourCommand('faq', (index) => setOpen(index));
+
   return (
-    <ul className="divide-y divide-border border-y border-border">
+    <ul data-tour="faq" className="divide-y divide-border border-y border-border">
       {FAQS.map((item, index) => {
         const expanded = open === index;
         const buttonId = `${baseId}-q-${index}`;

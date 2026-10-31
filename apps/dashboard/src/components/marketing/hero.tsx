@@ -1,6 +1,7 @@
 import { ArrowDown, ShieldCheck, Zap, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Container } from './section-heading';
+import { TakeTourButton } from './tour/take-tour-button';
 import { EdgeNetworkIllustration, EdgeStatusList, LiveStatsCard, PurgeToast } from './illustrations/edge-network';
 
 const HIGHLIGHTS = [
@@ -27,16 +28,14 @@ export function Hero() {
             id="hero-title"
             className="mt-6 text-[40px] font-semibold leading-[1.05] tracking-[-0.03em] text-balance text-foreground sm:text-[56px] lg:text-[68px]"
           >
-            Your website, your files and your traffic, <span className="mk-gradient-text">served from the edge</span>
+            Your app, your files and your traffic, <span className="mk-gradient-text">served from the edge</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-pretty text-muted-foreground sm:text-lg">
             RivoCloud puts a global cache in front of your site, stores your files in S3-compatible buckets and shows you
             every request in real time. One console, one API, no glue code.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" className="h-11 w-full px-6 text-[15px] sm:w-auto">
-              <a href="#contact">Request a demo</a>
-            </Button>
+            <TakeTourButton className="h-11 w-full px-6 text-[15px] sm:w-auto" />
             <Button asChild size="lg" variant="outline" className="h-11 w-full px-6 text-[15px] sm:w-auto">
               <a href="#how-it-works">
                 See how it works

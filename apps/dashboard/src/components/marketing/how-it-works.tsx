@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useTourCommand } from './tour/tour-bus';
 import { ArchitectureDiagram, type ArchLink, type ArchNode } from './illustrations/architecture-diagram';
 
 export const STEPS: Array<{
@@ -47,6 +48,10 @@ export function HowItWorks() {
   const baseId = useId();
   const step = STEPS[active];
 
+  useTourCommand('how', (index) => {
+    if (index >= 0 && index < STEPS.length) setActive(index);
+  });
+
   const move = (index: number) => {
     const next = (index + STEPS.length) % STEPS.length;
     setActive(next);
@@ -70,7 +75,7 @@ export function HowItWorks() {
   };
 
   return (
-    <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-12">
+    <div data-tour="how-it-works" className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-12">
       <div role="tablist" aria-label="Setup steps" aria-orientation="vertical" className="flex flex-col gap-2">
         {STEPS.map((item, index) => {
           const selected = index === active;

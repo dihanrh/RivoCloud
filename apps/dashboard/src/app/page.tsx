@@ -13,6 +13,7 @@ import { Testimonials } from '@/components/marketing/testimonials';
 import { Faq } from '@/components/marketing/faq';
 import { Contact } from '@/components/marketing/contact';
 import { SiteFooter } from '@/components/marketing/site-footer';
+import { GuidedTour } from '@/components/marketing/tour/guided-tour';
 
 export const metadata: Metadata = {
   title: 'RivoCloud: CDN, object storage and analytics in one console',
@@ -36,12 +37,14 @@ export default function LandingPage() {
 
         <section id="products" aria-labelledby="products-title" className="bg-background py-20 sm:py-28">
           <Container>
-            <SectionHeading
-              id="products-title"
-              kicker="Products"
-              title="Three products, one console"
-              lede="Websites, storage and analytics share the same edge network, the same team and the same API. Pick a product to see it in action."
-            />
+            <div data-tour="products-intro">
+              <SectionHeading
+                id="products-title"
+                kicker="Products"
+                title="Three products, one console"
+                lede="Websites, storage and analytics share the same edge network, the same team and the same API. Pick a product to see it in action."
+              />
+            </div>
             <FeatureTabs />
           </Container>
         </section>
@@ -88,6 +91,7 @@ export default function LandingPage() {
         <Contact />
       </main>
       <SiteFooter />
+      <GuidedTour />
     </div>
   );
 }
