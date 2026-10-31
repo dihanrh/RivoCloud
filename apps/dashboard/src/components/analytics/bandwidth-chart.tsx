@@ -2,16 +2,18 @@
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAnalyticsBandwidth } from '@/hooks/use-analytics';
-import { formatBytes } from '@/lib/format-bytes';
+import { formatBytes } from '@/lib/format';
 import type { AnalyticsQueryParams } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ChartEmpty, ChartError, ChartSkeleton } from './chart-states';
 import { AXIS_TICK, CHART_COLORS, SERIES_ANIMATION, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
 
-const bytesLabel = (v: number) => formatBytes(String(Math.round(v)));
+const bytesLabel = (v: number) => formatBytes(Math.round(v));
 
 export function BandwidthChart({ params }: { params: AnalyticsQueryParams }) {
-  const { data, isLoading } = useAnalyticsBandwidth(params);
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  const { data, isLoading, error } = useAnalyticsBandwidth(params);
+  if (isLoading) return <ChartSkeleton className="h-64" />;
+  if (error) return <ChartError className="h-64" />;
+  if (!data?.series.length) return <ChartEmpty className="h-64" />;
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">

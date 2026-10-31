@@ -1,20 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Copy, UserMinus, UserPlus, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ErrorBanner } from '@/components/ui/empty-state';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DataTable, RowActionsMenu, TableToolbar, type DataTableColumn } from '@/components/ui/data-table';
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogForm,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { MenuItem, MenuSeparator } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { RelativeTime } from '@/components/ui/relative-time';
+import { useToast } from '@/components/ui/toast';
+import { ReadOnlyNote } from '@/components/storage/read-only-note';
 import { useAddMember, useMembers, useRemoveMember, useUpdateMemberRole } from '@/hooks/use-members';
-import { canChangeRoles, canManageMembers } from '@/lib/rbac';
+import { useQuickActionParam } from '@/hooks/use-quick-action-param';
 import { errorMessage } from '@/lib/http';
+import { canChangeRoles, canManageMembers } from '@/lib/rbac';
 import type { OrgMember, OrgRole } from '@/lib/types';
+import { UserAvatar } from './user-avatar';
+import { afterMenuClose } from '@/lib/after-menu-close';
 
 type InviteRole = Exclude<OrgRole, 'owner'>;
+
+export const ROLE_NAME: Record<OrgRole, string> = { owner: 'Owner', admin: 'Admin', developer: 'Developer', viewer: 'Viewer' };
+
+const ROLE_HINT: Record<InviteRole, string> = {
+  admin: 'Manages members, websites, storage and keys.',
+  developer: 'Changes websites, storage and their own API keys.',
+  viewer: 'Read-only access to websites, storage and analytics.',
+};
 
 function inviteRolesFor(role: string | null): InviteRole[] {
   return role === 'owner' ? ['admin', 'developer', 'viewer'] : ['developer', 'viewer'];
@@ -27,149 +53,266 @@ function canRemove(role: string | null, target: OrgMember): boolean {
   return role === 'admin' && (target.role === 'developer' || target.role === 'viewer');
 }
 
-export function MembersPanel({ orgId, role }: { orgId: string; role: string | null }) {
-  const { data: members, isLoading, error } = useMembers(orgId);
-  const addMember = useAddMember(orgId);
-  const updateRole = useUpdateMemberRole(orgId);
-  const removeMember = useRemoveMember(orgId);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  const inviteRoles = inviteRolesFor(role);
+function InviteMemberDialog({
+  orgId,
+  role,
+  open,
+  onOpenChange,
+}: {
+  orgId: string;
+  role: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const toast = useToast();
+  const addMember = useAddMember(orgId);
+  const roles = inviteRolesFor(role);
   const [email, setEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<InviteRole>('developer');
-  const [message, setMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pending = addMember.isPending;
 
-  async function handleInvite(event: React.FormEvent) {
+  function reset() {
+    setEmail('');
+    setInviteRole('developer');
+    setEmailError(null);
+    setError(null);
+  }
+
+  function handleOpenChange(next: boolean) {
+    if (pending) return;
+    if (!next) reset();
+    onOpenChange(next);
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setMessage(null);
-    try {
-      await addMember.mutateAsync({ email, role: inviteRole });
-      setEmail('');
-    } catch (err) {
-      setMessage(errorMessage(err, 'Could not invite the member. Check the email and try again.'));
+    setError(null);
+    const value = email.trim();
+    if (!EMAIL_RE.test(value)) {
+      setEmailError(value ? 'Enter a valid email address.' : 'Enter an email address.');
+      return;
     }
-  }
-
-  async function handleRoleChange(userId: string, newRole: OrgRole) {
-    setMessage(null);
+    setEmailError(null);
     try {
-      await updateRole.mutateAsync({ userId, role: newRole });
+      await addMember.mutateAsync({ email: value, role: inviteRole });
+      toast.success('Member invited', `${value} joined as ${ROLE_NAME[inviteRole].toLowerCase()}.`);
+      reset();
+      onOpenChange(false);
     } catch (err) {
-      setMessage(errorMessage(err, 'Could not change the role. Try again.'));
-    }
-  }
-
-  async function handleRemove(userId: string) {
-    setMessage(null);
-    try {
-      await removeMember.mutateAsync(userId);
-    } catch (err) {
-      setMessage(errorMessage(err, 'Could not remove the member. Try again.'));
+      setError(errorMessage(err, 'Could not invite the member. Check the email and try again.'));
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {canManageMembers(role) && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>Invite a member</CardTitle>
-            <CardDescription>The person needs a RivoCloud account with this email.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleInvite} className="flex flex-wrap items-end gap-3">
-              <div className="flex min-w-56 flex-1 flex-col gap-1.5">
-                <Label htmlFor="invite-email">Email</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="teammate@example.com"
-                />
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent size="sm" preventClose={pending}>
+        <DialogForm onSubmit={handleSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>Invite member</DialogTitle>
+            <DialogDescription>The person needs a RivoCloud account with this email.</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <Field label="Email" error={emailError} required>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                }}
+                placeholder="teammate@example.com"
+                autoComplete="off"
+                autoFocus
+              />
+            </Field>
+            <Field label="Role" hint={ROLE_HINT[inviteRole]}>
+              <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as InviteRole)}>
+                {roles.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_NAME[r]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {error && (
+              <div role="alert" className="rounded-[var(--radius)] border border-destructive/40 bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
+                {error}
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="invite-role">Role</Label>
-                <Select id="invite-role" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as InviteRole)}>
-                  {inviteRoles.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <Button type="submit" disabled={addMember.isPending}>
-                {addMember.isPending ? 'Inviting…' : 'Invite member'}
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" disabled={pending}>
+                Cancel
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-      {message && <ErrorBanner>{message}</ErrorBanner>}
-      {isLoading && <Skeleton className="h-32 w-full" />}
-      {error && <ErrorBanner>Could not load members. Refresh the page to try again.</ErrorBanner>}
-      {members && (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.map((member) => (
-                <TableRow key={member.userId}>
-                  <TableCell className="font-medium">{member.user.name}</TableCell>
-                  <TableCell>{member.user.email}</TableCell>
-                  <TableCell>
-                    {canChangeRoles(role) && member.role !== 'owner' ? (
-                      <Select
-                        aria-label={`Role for ${member.user.email}`}
-                        className="h-8 w-auto text-[13px]"
-                        value={member.role}
-                        disabled={updateRole.isPending}
-                        onChange={(e) => void handleRoleChange(member.userId, e.target.value as OrgRole)}
-                      >
-                        {(['admin', 'developer', 'viewer'] as const).map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>{member.role}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end">
-                      {canRemove(role, member) && (
-                        <Button
-                          variant="destructive-outline"
-                          size="sm"
-                          aria-label={`Remove ${member.user.email}`}
-                          disabled={removeMember.isPending}
-                          onClick={() => void handleRemove(member.userId)}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
+            </DialogClose>
+            <Button type="submit" loading={pending}>
+              Invite member
+            </Button>
+          </DialogFooter>
+        </DialogForm>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function MembersPanel({ orgId, role, meId }: { orgId: string; role: string | null; meId?: string }) {
+  const toast = useToast();
+  const { data: members, isLoading, error, refetch } = useMembers(orgId);
+  const updateRole = useUpdateMemberRole(orgId);
+  const removeMember = useRemoveMember(orgId);
+  const [search, setSearch] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [removing, setRemoving] = useState<OrgMember | null>(null);
+  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
+
+  const canManage = canManageMembers(role);
+  useQuickActionParam('invite', () => setInviteOpen(true), canManage);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (members ?? []).filter((m) => !q || m.user.name.toLowerCase().includes(q) || m.user.email.toLowerCase().includes(q));
+  }, [members, search]);
+
+  async function handleRoleChange(member: OrgMember, newRole: OrgRole) {
+    setSavingRoleFor(member.userId);
+    try {
+      await updateRole.mutateAsync({ userId: member.userId, role: newRole });
+      toast.success('Role updated', `${member.user.email} is now ${ROLE_NAME[newRole].toLowerCase()}.`);
+    } catch (err) {
+      toast.error('Could not update the role', errorMessage(err, 'Try again.'));
+    } finally {
+      setSavingRoleFor(null);
+    }
+  }
+
+  async function copyEmail(email: string) {
+    try {
+      await navigator.clipboard.writeText(email);
+      toast.success('Email copied', email);
+    } catch {
+      toast.error('Could not copy', 'Select the email and copy it manually.');
+    }
+  }
+
+  const columns: DataTableColumn<OrgMember>[] = [
+    {
+      id: 'member',
+      header: 'Member',
+      cell: (m) => (
+        <div className="flex min-w-0 items-center gap-3">
+          <UserAvatar name={m.user.name} email={m.user.email} className="hidden sm:flex" />
+          <div className="flex min-w-0 max-w-[8.5rem] flex-col sm:max-w-none">
+            <span className="flex items-center gap-1.5 truncate font-medium">
+              {m.user.name || m.user.email}
+              {meId && m.userId === meId && <Badge variant="outline">You</Badge>}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">{m.user.email}</span>
+          </div>
+        </div>
+      ),
+      className: 'pr-2 sm:pr-4',
+    },
+    {
+      id: 'role',
+      header: 'Role',
+      cell: (m) =>
+        canChangeRoles(role) && m.role !== 'owner' ? (
+          <Select
+            aria-label={`Role for ${m.user.email}`}
+            className="h-8 w-[6.5rem] text-[13px] sm:w-36"
+            value={m.role}
+            disabled={savingRoleFor === m.userId}
+            aria-busy={savingRoleFor === m.userId || undefined}
+            onChange={(e) => void handleRoleChange(m, e.target.value as OrgRole)}
+          >
+            {(['admin', 'developer', 'viewer'] as const).map((r) => (
+              <option key={r} value={r}>
+                {ROLE_NAME[r]}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <Badge variant={m.role === 'owner' ? 'default' : 'secondary'}>{ROLE_NAME[m.role] ?? m.role}</Badge>
+        ),
+    },
+    {
+      id: 'joined',
+      header: 'Joined',
+      cell: (m) => <RelativeTime value={m.joinedAt} className="text-muted-foreground" />,
+      align: 'right',
+      hideBelow: 'sm',
+    },
+  ];
+
+  return (
+    <div className="flex flex-col">
+      {!canManage && <ReadOnlyNote>Only account owners and admins can invite, remove or change members.</ReadOnlyNote>}
+      <DataTable
+        aria-label="Members"
+        columns={columns}
+        rows={filtered}
+        getRowKey={(m) => m.userId}
+        loading={isLoading}
+        error={error ? 'Could not load members.' : null}
+        onRetry={() => void refetch()}
+        toolbar={
+          <TableToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search members"
+            count={members ? filtered.length : undefined}
+            noun="member"
+            actions={
+              canManage ? (
+                <Button leftIcon={<UserPlus />} onClick={() => setInviteOpen(true)}>
+                  Invite member
+                </Button>
+              ) : undefined
+            }
+          />
+        }
+        empty={<EmptyState icon={Users} title="No members yet" description="Invite teammates to work in this account." />}
+        emptyFiltered={search.trim() ? <EmptyState title="No matching members" description="Try a different name or email." /> : undefined}
+        rowActions={(m) => (
+          <RowActionsMenu label={`Actions for ${m.user.email}`}>
+            <MenuItem icon={<Copy />} onSelect={() => void copyEmail(m.user.email)}>
+              Copy email
+            </MenuItem>
+            {canRemove(role, m) && (
+              <>
+                <MenuSeparator />
+                <MenuItem icon={<UserMinus />} tone="destructive" onSelect={() => afterMenuClose(() => setRemoving(m))}>
+                  Remove member…
+                </MenuItem>
+              </>
+            )}
+          </RowActionsMenu>
+        )}
+      />
+      {canManage && <InviteMemberDialog orgId={orgId} role={role} open={inviteOpen} onOpenChange={setInviteOpen} />}
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        tone="destructive"
+        title="Remove member"
+        description={
+          <>
+            <span className="font-semibold text-foreground">{removing?.user.email}</span> loses access to this account straight away.
+            You can invite them again later.
+          </>
+        }
+        confirmLabel="Remove member"
+        successToast={{ title: 'Member removed', description: removing?.user.email }}
+        errorFallback="Could not remove the member. Try again."
+        onConfirm={async () => {
+          if (removing) await removeMember.mutateAsync(removing.userId);
+        }}
+      />
     </div>
   );
 }

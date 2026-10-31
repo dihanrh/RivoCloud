@@ -7,7 +7,7 @@ import ApiKeysPage from './api-keys/page';
 import AuditLogPage from './audit-log/page';
 
 const redirect = vi.fn();
-vi.mock('next/navigation', () => ({ redirect: (to: string) => redirect(to) }));
+vi.mock('next/navigation', () => ({ redirect: (to: string) => redirect(to), useSearchParams: () => null }));
 
 function stubBackend(role: string) {
   vi.stubGlobal(
@@ -45,7 +45,7 @@ describe('settings routes', () => {
     expect(screen.getByRole('heading', { name: 'Members' })).toBeInTheDocument();
     expect(screen.getByText('Manage account')).toBeInTheDocument();
     expect(await screen.findByText('me@example.com')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite member' })).toBeInTheDocument();
   });
 
   it('api keys page shows its header and the keys panel', async () => {

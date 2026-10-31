@@ -68,6 +68,26 @@ describe('AuditLogPanel', () => {
     expect(screen.getByText('System')).toBeInTheDocument();
     expect(screen.getAllByText('203.0.113.9')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    expect(screen.getByText('All 4 events loaded')).toBeInTheDocument();
+  });
+
+  it('filters by action group', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [entry(), entry({ id: 'log-2', action: 'bucket.deleted', resourceType: 'bucket', resourceId: 'b-1' })],
+          nextCursor: null,
+        }),
+        { status: 200 },
+      ),
+    );
+    renderPanel();
+    await screen.findByText('zone.created');
+    await user.selectOptions(screen.getByLabelText('Action'), 'bucket');
+    expect(screen.getByText('bucket.deleted')).toBeInTheDocument();
+    expect(screen.queryByText('zone.created')).not.toBeInTheDocument();
+    expect(screen.getByText('1 event')).toBeInTheDocument();
   });
 
   it('load more requests the next cursor', async () => {
@@ -82,6 +102,8 @@ describe('AuditLogPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Load more' }));
 
     expect(await screen.findByText('zone.updated')).toBeInTheDocument();
+    // The first page stays rendered while the next one is appended below it.
+    expect(screen.getByText('zone.created')).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]![0]).toContain('cursor=log-1');
   });
 });

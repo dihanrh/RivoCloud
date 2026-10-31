@@ -3,7 +3,8 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAnalyticsStatusCodes } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
+import { formatNumber, formatPercent } from '@/lib/format';
+import { ChartEmpty, ChartError, ChartSkeleton } from './chart-states';
 import { CHART_COLORS, SERIES_ANIMATION, TOOLTIP_STYLE } from './chart-theme';
 
 // Color by status class so a glance shows healthy vs failing traffic.
@@ -16,9 +17,15 @@ function colorFor(statusCode: number): string {
 }
 
 export function StatusCodeChart({ params }: { params: AnalyticsQueryParams }) {
-  const { data, isLoading } = useAnalyticsStatusCodes(params);
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
-  const breakdown = data?.breakdown ?? [];
+  const { data, isLoading, error } = useAnalyticsStatusCodes(params);
+  if (isLoading) return <ChartSkeleton className="h-48" />;
+  if (error) return <ChartError className="h-48" />;
+  const breakdown = [...(data?.breakdown ?? [])].sort((a, b) => b.requests - a.requests);
+  if (breakdown.length === 0) return <ChartEmpty className="h-48" />;
+  const total = breakdown.reduce((sum, e) => sum + e.requests, 0);
+  // The legend lists the six largest codes; the rest are summed into "Other".
+  const legend = breakdown.slice(0, 6);
+  const otherRequests = breakdown.slice(6).reduce((sum, e) => sum + e.requests, 0);
   return (
     <div className="flex h-48 w-full items-center gap-4">
       <div className="h-full min-w-0 flex-1">
@@ -33,14 +40,23 @@ export function StatusCodeChart({ params }: { params: AnalyticsQueryParams }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="flex flex-col gap-1 text-[13px]">
-        {breakdown.map((entry) => (
-          <li key={entry.statusCode} className="flex items-center gap-2">
+      <ul className="flex min-w-40 flex-col gap-1.5 text-[13px]">
+        {legend.map((entry) => (
+          <li key={entry.statusCode} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-2">
             <span className="h-2 w-2 rounded-full" style={{ background: colorFor(entry.statusCode) }} aria-hidden />
-            <span className="tabular-nums">{entry.statusCode}</span>
-            <span className="tabular-nums text-muted-foreground">{entry.requests.toLocaleString()}</span>
+            <span className="font-medium tabular-nums">{entry.statusCode}</span>
+            <span className="text-right tabular-nums text-muted-foreground">{formatNumber(entry.requests)}</span>
+            <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{formatPercent(total ? entry.requests / total : 0)}</span>
           </li>
         ))}
+        {otherRequests > 0 && (
+          <li className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-2 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-border-strong" aria-hidden />
+            <span className="font-medium">Other</span>
+            <span className="text-right tabular-nums">{formatNumber(otherRequests)}</span>
+            <span className="w-12 text-right text-xs tabular-nums">{formatPercent(total ? otherRequests / total : 0)}</span>
+          </li>
+        )}
       </ul>
     </div>
   );

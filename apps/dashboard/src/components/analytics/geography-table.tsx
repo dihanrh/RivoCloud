@@ -2,37 +2,49 @@
 
 import { useAnalyticsGeography } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ShareTable } from './share-table';
 
-export function GeographyTable({ params }: { params: AnalyticsQueryParams }) {
-  const { data, isLoading } = useAnalyticsGeography(params);
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
-  const countries = data?.countries ?? [];
+let regionNames: Intl.DisplayNames | null | undefined;
+function countryName(code: string): string | null {
+  if (regionNames === undefined) {
+    try {
+      regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    } catch {
+      regionNames = null;
+    }
+  }
+  if (!regionNames || !/^[A-Z]{2}$/.test(code)) return null;
+  try {
+    const name = regionNames.of(code);
+    return name && name !== code ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+export function GeographyTable({ params, limit = 10 }: { params: AnalyticsQueryParams; limit?: number }) {
+  const { data, isLoading, error } = useAnalyticsGeography(params);
+  const countries = [...(data?.countries ?? [])].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Country</TableHead>
-          <TableHead className="text-right">Requests</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {countries.map((row) => (
-          <TableRow key={row.country}>
-            <TableCell>{row.country}</TableCell>
-            <TableCell className="text-right tabular-nums">{row.requests.toLocaleString()}</TableCell>
-          </TableRow>
-        ))}
-        {countries.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={2} className="py-6 text-muted-foreground">
-              No data for this range.
-            </TableCell>
-          </TableRow>
-        )}
-      </TableBody>
-    </Table>
+    <ShareTable
+      labelHeader="Country"
+      loading={isLoading}
+      error={!!error}
+      rows={countries.map((row) => {
+        const name = countryName(row.country);
+        return {
+          key: row.country,
+          requests: row.requests,
+          bytesSent: row.bytesSent,
+          label: (
+            <span className="flex items-center gap-2">
+              <span className="w-7 shrink-0 rounded bg-muted px-1 py-0.5 text-center font-mono text-[11px] font-semibold">{row.country}</span>
+              {name && <span className="truncate">{name}</span>}
+            </span>
+          ),
+        };
+      })}
+    />
   );
 }

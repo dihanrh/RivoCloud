@@ -40,13 +40,23 @@ describe('AnalyticsFilters', () => {
     const onChange = vi.fn();
     renderWithClient(<AnalyticsFilters params={{ rangeKey: '24h' }} onChange={onChange} />);
 
-    const rangeSelect = await screen.findByLabelText('Range');
-    fireEvent.change(rangeSelect, { target: { value: '7d' } });
+    const range = await screen.findByRole('radiogroup', { name: 'Range' });
+    expect(screen.getByRole('radio', { name: 'Last 24 hours' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Last 7 days' }));
+    expect(range).toBeInTheDocument();
 
     expect(onChange).toHaveBeenCalledOnce();
     const arg = onChange.mock.calls[0][0];
     expect(arg.rangeKey).toBe('7d');
     expect(arg.from).toBeTruthy();
     expect(arg.to).toBeTruthy();
+  });
+
+  it('moves through the ranges with the arrow keys', async () => {
+    const onChange = vi.fn();
+    renderWithClient(<AnalyticsFilters params={{ rangeKey: '24h' }} onChange={onChange} showZone={false} />);
+    expect(screen.queryByLabelText('Website')).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Last 24 hours' }), { key: 'ArrowRight' });
+    expect(onChange.mock.calls[0][0].rangeKey).toBe('7d');
   });
 });

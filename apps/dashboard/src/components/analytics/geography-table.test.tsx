@@ -32,6 +32,8 @@ describe('GeographyTable', () => {
     );
     renderWithClient(<GeographyTable params={{}} />);
     expect(await screen.findByText('DE')).toBeInTheDocument();
+    expect(screen.getByText('Germany')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
   });
 });

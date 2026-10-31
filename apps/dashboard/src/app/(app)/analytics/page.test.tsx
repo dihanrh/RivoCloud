@@ -41,4 +41,24 @@ describe('AnalyticsPage', () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.map(([path]) => path)).toContain('/api/analytics/bandwidth?zoneId=zone-1'));
   });
+
+  it('shows an empty state instead of charts when there is no traffic', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: string) => {
+        const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+        if (path === '/api/zones') return json({ zones: [], total: 0 });
+        if (path.startsWith('/api/analytics/overview')) return json({ requests: 0, bytesSent: 0, hitRatio: 0 });
+        return json({ series: [] });
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AnalyticsPage />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('No traffic in this range')).toBeInTheDocument();
+    expect(screen.queryByText('bandwidth chart')).not.toBeInTheDocument();
+  });
 });

@@ -3,15 +3,17 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useAnalyticsLatency } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ChartEmpty, ChartError, ChartSkeleton } from './chart-states';
 import { AXIS_TICK, CHART_COLORS, SERIES_ANIMATION, TOOLTIP_STYLE, formatBucketTime } from './chart-theme';
 
 // Quantiles come back as raw floats (e.g. 224.40000000000003).
 const msLabel = (v: number) => `${Math.round(v)} ms`;
 
 export function LatencyChart({ params }: { params: AnalyticsQueryParams }) {
-  const { data, isLoading } = useAnalyticsLatency(params);
-  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  const { data, isLoading, error } = useAnalyticsLatency(params);
+  if (isLoading) return <ChartSkeleton className="h-64" />;
+  if (error) return <ChartError className="h-64" />;
+  if (!data?.series.length) return <ChartEmpty className="h-64" />;
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -27,7 +29,7 @@ export function LatencyChart({ params }: { params: AnalyticsQueryParams }) {
           />
           <YAxis tick={AXIS_TICK} tickLine={false} axisLine={false} width={52} tickFormatter={msLabel} />
           <Tooltip {...TOOLTIP_STYLE} labelFormatter={formatBucketTime} formatter={msLabel} />
-          <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
+          <Legend iconType="plainline" verticalAlign="top" align="right" height={28} wrapperStyle={{ fontSize: 12 }} />
           <Line type="monotone" dataKey="p50" name="p50" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />
           <Line type="monotone" dataKey="p95" name="p95" stroke={CHART_COLORS.orange} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />
           <Line type="monotone" dataKey="p99" name="p99" stroke={CHART_COLORS.purple} strokeWidth={2} dot={false} {...SERIES_ANIMATION} />

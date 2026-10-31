@@ -12,7 +12,7 @@ export default function MembersPage() {
         description="People who can access this account, and what they can do."
         crumbs={[{ label: 'Manage account' }, { label: 'Members' }]}
       />
-      <SettingsGate>{(me) => <MembersPanel orgId={me.orgId} role={me.role} />}</SettingsGate>
+      <SettingsGate>{(me) => <MembersPanel orgId={me.orgId} role={me.role} meId={me.id} />}</SettingsGate>
     </>
   );
 }
