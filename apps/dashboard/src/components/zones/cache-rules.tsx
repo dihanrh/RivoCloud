@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { DataTable, RowActionsMenu, type DataTableColumn } from '@/components/ui/data-table';
 import { MenuItem, MenuSeparator } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SectionTitle } from '@/components/ui/page-header';
@@ -16,7 +16,6 @@ import { errorMessage } from '@/lib/http';
 import type { CacheRule } from '@/lib/types';
 import { ACTION_LABEL, CacheRuleSheet, PATTERN_TYPE_LABEL, QUERY_STRING_LABEL } from './cache-rule-sheet';
 import { formatTtl } from './format';
-import { ZoneRowMenu } from './row-menu';
 
 const ACTION_VARIANT = {
   cache: 'success',
@@ -119,54 +118,52 @@ export function CacheRules({ zoneId }: { zoneId: string }) {
       ? (rule: CacheRule) => {
           const index = rules.indexOf(rule);
           return (
-            <ZoneRowMenu label={`Actions for ${rule.pattern}`}>
-              {(openOverlay) => (
-                <>
-                  {canWrite && (
-                    <>
-                      <MenuItem
-                        icon={<Pencil />}
-                        onSelect={() => {
-                          setEditing(rule);
-                          openOverlay(() => setFormOpen(true));
-                        }}
-                      >
-                        Edit
-                      </MenuItem>
-                      <MenuItem
-                        icon={<ArrowUp />}
-                        disabled={index === 0 || reorder.isPending}
-                        onSelect={() => void move(rule, -1)}
-                      >
-                        Move up
-                      </MenuItem>
-                      <MenuItem
-                        icon={<ArrowDown />}
-                        disabled={index === rules.length - 1 || reorder.isPending}
-                        onSelect={() => void move(rule, 1)}
-                      >
-                        Move down
-                      </MenuItem>
-                    </>
-                  )}
-                  {canDelete && (
-                    <>
-                      {canWrite && <MenuSeparator />}
-                      <MenuItem
-                        icon={<Trash2 />}
-                        tone="destructive"
-                        onSelect={() => {
-                          setDeleting(rule);
-                          openOverlay(() => setDeleteOpen(true));
-                        }}
-                      >
-                        Delete…
-                      </MenuItem>
-                    </>
-                  )}
-                </>
-              )}
-            </ZoneRowMenu>
+            <RowActionsMenu label={`Actions for ${rule.pattern}`}>
+              <>
+                {canWrite && (
+                  <>
+                    <MenuItem
+                      icon={<Pencil />}
+                      onSelectAfterClose={() => {
+                        setEditing(rule);
+                        setFormOpen(true);
+                      }}
+                    >
+                      Edit
+                    </MenuItem>
+                    <MenuItem
+                      icon={<ArrowUp />}
+                      disabled={index === 0 || reorder.isPending}
+                      onSelect={() => void move(rule, -1)}
+                    >
+                      Move up
+                    </MenuItem>
+                    <MenuItem
+                      icon={<ArrowDown />}
+                      disabled={index === rules.length - 1 || reorder.isPending}
+                      onSelect={() => void move(rule, 1)}
+                    >
+                      Move down
+                    </MenuItem>
+                  </>
+                )}
+                {canDelete && (
+                  <>
+                    {canWrite && <MenuSeparator />}
+                    <MenuItem
+                      icon={<Trash2 />}
+                      tone="destructive"
+                      onSelectAfterClose={() => {
+                        setDeleting(rule);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      Delete…
+                    </MenuItem>
+                  </>
+                )}
+              </>
+            </RowActionsMenu>
           );
         }
       : undefined;

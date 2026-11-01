@@ -12,7 +12,6 @@ import { Select } from '@/components/ui/input';
 import { RelativeTime } from '@/components/ui/relative-time';
 import { useToast } from '@/components/ui/toast';
 import type { Bucket } from '@/lib/types';
-import { afterMenuClose } from '@/lib/after-menu-close';
 
 type Visibility = 'all' | 'private' | 'public';
 
@@ -159,7 +158,7 @@ export function BucketList({ buckets, loading, error, onRetry, onCreate, onDelet
           {onDelete && (
             <>
               <MenuSeparator />
-              <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => afterMenuClose(() => onDelete(b))}>
+              <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => onDelete(b)}>
                 Delete bucket…
               </MenuItem>
             </>

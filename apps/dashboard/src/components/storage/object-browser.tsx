@@ -11,7 +11,6 @@ import { RelativeTime } from '@/components/ui/relative-time';
 import { useToast } from '@/components/ui/toast';
 import { formatBytes } from '@/lib/format';
 import type { StorageObject } from '@/lib/types';
-import { afterMenuClose } from '@/lib/after-menu-close';
 
 // A pending object has been issued an upload URL but storage hasn't confirmed the file landed yet.
 const STATUS_BADGE: Record<StorageObject['status'], { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
@@ -125,7 +124,7 @@ export function ObjectBrowser({ objects, loading, error, onRetry, onDelete, onSh
       rowActions={(o) => (
         <RowActionsMenu label={`Actions for ${o.key}`}>
           {onShare && o.status === 'ready' && (
-            <MenuItem icon={<Link2 />} onSelect={() => afterMenuClose(() => onShare(o.key))}>
+            <MenuItem icon={<Link2 />} onSelectAfterClose={() => onShare(o.key)}>
               Share link…
             </MenuItem>
           )}
@@ -135,7 +134,7 @@ export function ObjectBrowser({ objects, loading, error, onRetry, onDelete, onSh
           {onDelete && (
             <>
               <MenuSeparator />
-              <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => afterMenuClose(() => onDelete(o.key))}>
+              <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => onDelete(o.key)}>
                 Delete file…
               </MenuItem>
             </>

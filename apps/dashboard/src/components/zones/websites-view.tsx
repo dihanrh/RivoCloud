@@ -7,7 +7,7 @@ import { Badge, StatusDot } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CopyButton } from '@/components/ui/copy-button';
-import { DataTable, TablePrimaryLink, TableToolbar, type DataTableColumn } from '@/components/ui/data-table';
+import { DataTable, RowActionsMenu, TablePrimaryLink, TableToolbar, type DataTableColumn } from '@/components/ui/data-table';
 import { MenuItem, MenuSeparator } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Select } from '@/components/ui/input';
@@ -25,7 +25,6 @@ import type { Zone } from '@/lib/types';
 import { zoneHostname } from '@/lib/zone-hostname';
 import { CreateZoneDialog } from './create-zone-dialog';
 import { copyToClipboard } from './menu-helpers';
-import { ZoneRowMenu } from './row-menu';
 import { ReadOnlyNote } from './zone-shell';
 
 type StatusFilter = 'all' | 'active' | 'paused';
@@ -224,50 +223,48 @@ function WebsiteRowActions({ zone }: { zone: Zone }) {
 
   return (
     <>
-      <ZoneRowMenu label={`Actions for ${zone.name}`}>
-        {(openOverlay) => (
-          <>
-            <MenuItem icon={<ExternalLink />} onSelect={() => router.push(`/zones/${zone.id}`)}>
-              Open
-            </MenuItem>
-            <MenuItem icon={<BarChart3 />} onSelect={() => router.push(`/zones/${zone.id}/analytics`)}>
-              Analytics
-            </MenuItem>
-            <MenuItem icon={<Zap />} onSelect={() => router.push(`/zones/${zone.id}/caching`)}>
-              Caching
-            </MenuItem>
-            <MenuSeparator />
+      <RowActionsMenu label={`Actions for ${zone.name}`}>
+        <>
+          <MenuItem icon={<ExternalLink />} onSelect={() => router.push(`/zones/${zone.id}`)}>
+            Open
+          </MenuItem>
+          <MenuItem icon={<BarChart3 />} onSelect={() => router.push(`/zones/${zone.id}/analytics`)}>
+            Analytics
+          </MenuItem>
+          <MenuItem icon={<Zap />} onSelect={() => router.push(`/zones/${zone.id}/caching`)}>
+            Caching
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            icon={<Copy />}
+            onSelect={() =>
+              void copyToClipboard(hostname, toast, {
+                success: 'Hostname copied',
+                description: hostname,
+              })
+            }
+          >
+            Copy hostname
+          </MenuItem>
+          {canWrite && (
             <MenuItem
-              icon={<Copy />}
-              onSelect={() =>
-                void copyToClipboard(hostname, toast, {
-                  success: 'Hostname copied',
-                  description: hostname,
-                })
-              }
+              icon={zone.enabled ? <Pause /> : <Play />}
+              disabled={update.isPending}
+              onSelect={() => void togglePaused()}
             >
-              Copy hostname
+              {zone.enabled ? 'Pause website' : 'Resume website'}
             </MenuItem>
-            {canWrite && (
-              <MenuItem
-                icon={zone.enabled ? <Pause /> : <Play />}
-                disabled={update.isPending}
-                onSelect={() => void togglePaused()}
-              >
-                {zone.enabled ? 'Pause website' : 'Resume website'}
+          )}
+          {canDelete && (
+            <>
+              <MenuSeparator />
+              <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => setDeleting(true)}>
+                Delete website…
               </MenuItem>
-            )}
-            {canDelete && (
-              <>
-                <MenuSeparator />
-                <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => openOverlay(() => setDeleting(true))}>
-                  Delete website…
-                </MenuItem>
-              </>
-            )}
-          </>
-        )}
-      </ZoneRowMenu>
+            </>
+          )}
+        </>
+      </RowActionsMenu>
       {canDelete && (
         <ConfirmDialog
           open={deleting}

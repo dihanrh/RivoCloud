@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CopyButton } from '@/components/ui/copy-button';
-import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { DataTable, RowActionsMenu, type DataTableColumn } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogBody,
@@ -37,7 +37,6 @@ import { errorMessage } from '@/lib/http';
 import type { Zone, ZoneDomain } from '@/lib/types';
 import { createDomainSchema } from '@/lib/validation';
 import { copyToClipboard } from './menu-helpers';
-import { ZoneRowMenu } from './row-menu';
 import { ReadOnlyNote, ZoneHeader } from './zone-shell';
 
 export const SSL_STATUS: Record<ZoneDomain['sslStatus'], { label: string; variant: 'warning' | 'success' | 'destructive' }> = {
@@ -194,43 +193,41 @@ export function ZoneDomains({ zone }: { zone: Zone }) {
           />
         }
         rowActions={(d) => (
-          <ZoneRowMenu label={`Actions for ${d.domain}`}>
-            {(openOverlay) => (
-              <>
-                {canWrite && (
-                  <MenuItem icon={<RefreshCw />} disabled={verifyDomain.isPending} onSelect={() => void verify(d)}>
-                    Verify now
-                  </MenuItem>
-                )}
-                <MenuItem
-                  icon={<Copy />}
-                  onSelect={() =>
-                    void copyToClipboard(d.cnameTarget, toast, {
-                      success: 'CNAME target copied',
-                      description: d.cnameTarget,
-                    })
-                  }
-                >
-                  Copy CNAME target
+          <RowActionsMenu label={`Actions for ${d.domain}`}>
+            <>
+              {canWrite && (
+                <MenuItem icon={<RefreshCw />} disabled={verifyDomain.isPending} onSelect={() => void verify(d)}>
+                  Verify now
                 </MenuItem>
-                {canDelete && (
-                  <>
-                    <MenuSeparator />
-                    <MenuItem
-                      icon={<Trash2 />}
-                      tone="destructive"
-                      onSelect={() => {
-                        setRemoving(d);
-                        openOverlay(() => setRemoveOpen(true));
-                      }}
-                    >
-                      Delete…
-                    </MenuItem>
-                  </>
-                )}
-              </>
-            )}
-          </ZoneRowMenu>
+              )}
+              <MenuItem
+                icon={<Copy />}
+                onSelect={() =>
+                  void copyToClipboard(d.cnameTarget, toast, {
+                    success: 'CNAME target copied',
+                    description: d.cnameTarget,
+                  })
+                }
+              >
+                Copy CNAME target
+              </MenuItem>
+              {canDelete && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem
+                    icon={<Trash2 />}
+                    tone="destructive"
+                    onSelectAfterClose={() => {
+                      setRemoving(d);
+                      setRemoveOpen(true);
+                    }}
+                  >
+                    Delete…
+                  </MenuItem>
+                </>
+              )}
+            </>
+          </RowActionsMenu>
         )}
       />
 

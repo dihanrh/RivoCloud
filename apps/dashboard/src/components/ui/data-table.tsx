@@ -114,7 +114,9 @@ export function DataTable<T>({
 
   let body: React.ReactNode;
   if (loading) {
-    body = <TableSkeleton rows={skeletonRows} columns={colCount} bare />;
+    const cellClassNames: (string | undefined)[] = columns.map((col) => (col.hideBelow ? HIDE[col.hideBelow] : undefined));
+    if (rowActions) cellClassNames.push('w-12');
+    body = <TableSkeleton rows={skeletonRows} columns={colCount} cellClassNames={cellClassNames} bare />;
   } else if (error) {
     body = (
       <tr>

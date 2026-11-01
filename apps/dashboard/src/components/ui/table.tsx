@@ -18,7 +18,9 @@ export function Table({
   ...props
 }: React.HTMLAttributes<HTMLTableElement> & { containerClassName?: string; containerStyle?: React.CSSProperties; stickyHeader?: boolean }) {
   return (
-    <div className={cn('w-full overflow-x-auto', containerClassName)} style={containerStyle}>
+    // `relative` makes the scroll wrapper the containing block for absolutely positioned
+    // descendants (e.g. `sr-only` header labels), so they cannot widen the page on mobile.
+    <div className={cn('relative w-full overflow-x-auto', containerClassName)} style={containerStyle}>
       <table
         className={cn('w-full caption-bottom text-[13px]', stickyHeader && '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1] [&_thead_th]:bg-muted', className)}
         {...props}

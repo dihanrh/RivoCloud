@@ -31,7 +31,6 @@ import { useQuickActionParam } from '@/hooks/use-quick-action-param';
 import { errorMessage } from '@/lib/http';
 import { scopesAllowedForRole } from '@/lib/rbac';
 import type { ApiKey, CreatedApiKey, OrgRole } from '@/lib/types';
-import { afterMenuClose } from '@/lib/after-menu-close';
 
 const SCOPE_GROUP: Record<string, string> = {
   zone: 'Websites',
@@ -347,7 +346,7 @@ export function ApiKeysPanel({ role, meId }: { role: string | null; meId: string
             {(canRevokeAny || k.userId === meId) && (
               <>
                 <MenuSeparator />
-                <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => afterMenuClose(() => setRevoking(k))}>
+                <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => setRevoking(k)}>
                   Revoke key…
                 </MenuItem>
               </>

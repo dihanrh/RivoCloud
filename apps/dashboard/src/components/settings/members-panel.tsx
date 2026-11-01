@@ -30,7 +30,6 @@ import { errorMessage } from '@/lib/http';
 import { canChangeRoles, canManageMembers } from '@/lib/rbac';
 import type { OrgMember, OrgRole } from '@/lib/types';
 import { UserAvatar } from './user-avatar';
-import { afterMenuClose } from '@/lib/after-menu-close';
 
 type InviteRole = Exclude<OrgRole, 'owner'>;
 
@@ -286,7 +285,7 @@ export function MembersPanel({ orgId, role, meId }: { orgId: string; role: strin
             {canRemove(role, m) && (
               <>
                 <MenuSeparator />
-                <MenuItem icon={<UserMinus />} tone="destructive" onSelect={() => afterMenuClose(() => setRemoving(m))}>
+                <MenuItem icon={<UserMinus />} tone="destructive" onSelectAfterClose={() => setRemoving(m)}>
                   Remove member…
                 </MenuItem>
               </>

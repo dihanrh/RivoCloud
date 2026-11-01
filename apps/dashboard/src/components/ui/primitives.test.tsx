@@ -108,6 +108,43 @@ describe('DropdownMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
   });
+
+  it('runs onSelectAfterClose only after the menu closed, and keeps focus off the trigger', async () => {
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>Actions</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <MenuItem
+                onSelectAfterClose={() => {
+                  // The menu must already be gone when the overlay opens.
+                  expect(document.querySelector('[role="menu"]')).toBeNull();
+                  setOpen(true);
+                }}
+              >
+                Delete…
+              </MenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {open && <input aria-label="Confirm name" autoFocus />}
+        </>
+      );
+    }
+    render(<Harness />);
+    const user = userEvent.setup();
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    await user.click(trigger);
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete…' }));
+    const field = await screen.findByRole('textbox', { name: 'Confirm name' });
+    await waitFor(() => expect(field).toHaveFocus());
+    await user.keyboard('abc');
+    expect(field).toHaveValue('abc');
+    expect(trigger).not.toHaveFocus();
+  });
 });
 
 describe('Tooltip', () => {

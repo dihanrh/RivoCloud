@@ -214,7 +214,7 @@ function HelpMenu() {
             <ExternalLink className="!size-3.5 text-muted-foreground" />
           </a>
         </MenuItem>
-        <MenuItem icon={<Keyboard />} shortcut="?" onSelect={openShortcuts}>
+        <MenuItem icon={<Keyboard />} shortcut="?" onSelectAfterClose={openShortcuts}>
           Keyboard shortcuts
         </MenuItem>
         <MenuItem asChild>
@@ -276,7 +276,7 @@ function ProfileMenu() {
         <MenuItem icon={<Building2 />} onSelect={() => router.push('/settings/members')}>
           Account members
         </MenuItem>
-        <MenuItem icon={<Keyboard />} shortcut="?" onSelect={openShortcuts}>
+        <MenuItem icon={<Keyboard />} shortcut="?" onSelectAfterClose={openShortcuts}>
           Keyboard shortcuts
         </MenuItem>
         <MenuSeparator />

@@ -287,7 +287,7 @@ export function UiPreview() {
                 Rename
               </MenuItem>
               <MenuSeparator />
-              <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => setConfirmOpen(true)}>
+              <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => setConfirmOpen(true)}>
                 Delete website…
               </MenuItem>
             </DropdownMenuContent>
@@ -348,7 +348,7 @@ export function UiPreview() {
               <MenuItem icon={<ExternalLink />}>Open</MenuItem>
               <MenuItem icon={<Copy />}>Copy hostname</MenuItem>
               <MenuSeparator />
-              <MenuItem icon={<Trash2 />} tone="destructive" onSelect={() => setConfirmOpen(true)}>
+              <MenuItem icon={<Trash2 />} tone="destructive" onSelectAfterClose={() => setConfirmOpen(true)}>
                 Delete…
               </MenuItem>
             </RowActionsMenu>

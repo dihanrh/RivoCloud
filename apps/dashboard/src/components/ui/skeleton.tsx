@@ -21,17 +21,20 @@ export function TableSkeleton({
   columns = 4,
   bare = false,
   className,
+  cellClassNames,
 }: {
   rows?: number;
   columns?: number;
   /** Render only the <tr> rows (to drop into an existing <tbody>). */
   bare?: boolean;
   className?: string;
+  /** Per-column classes for the cells (e.g. `hidden sm:table-cell`), so the skeleton hides the same columns as the real table. */
+  cellClassNames?: (string | undefined)[];
 }) {
   const body = Array.from({ length: rows }, (_, r) => (
     <tr key={r} className="border-b border-border last:border-0">
       {Array.from({ length: columns }, (_, c) => (
-        <td key={c} className="px-4 py-3">
+        <td key={c} className={cn('px-4 py-3', cellClassNames?.[c])}>
           <Skeleton className={cn('h-3.5', c === 0 ? 'w-3/4' : WIDTHS[(r + c) % WIDTHS.length])} />
         </td>
       ))}
@@ -44,7 +47,7 @@ export function TableSkeleton({
         <thead className="border-b border-border bg-muted">
           <tr>
             {Array.from({ length: columns }, (_, c) => (
-              <th key={c} className="h-9 px-4 text-left">
+              <th key={c} className={cn('h-9 px-4 text-left', cellClassNames?.[c])}>
                 <Skeleton className="h-3 w-16 bg-[#e1e4e8]" />
               </th>
             ))}
