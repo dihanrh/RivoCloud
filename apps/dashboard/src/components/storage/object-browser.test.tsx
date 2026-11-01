@@ -1,5 +1,6 @@
+import '@/components/ui/test-polyfills';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ObjectBrowser } from './object-browser';
 import type { StorageObject } from '@/lib/types';
@@ -41,21 +42,43 @@ describe('ObjectBrowser', () => {
     expect(screen.getByText('photo.png')).toBeInTheDocument();
     expect(screen.getByText('2.0 KB')).toBeInTheDocument();
     expect(screen.getByText('draft.txt')).toBeInTheDocument();
-    expect(screen.getByText('pending')).toBeInTheDocument();
+    const table = within(screen.getByRole('table', { name: 'Files' }));
+    expect(table.getByText('Ready')).toHaveClass('text-success');
+    expect(table.getByText('Uploading')).toHaveClass('text-warning');
+    expect(screen.queryByText('pending')).not.toBeInTheDocument();
+    expect(screen.getByText('2 files')).toBeInTheDocument();
+  });
+
+  it('labels deleted objects in sentence case with a destructive tone', () => {
+    render(<ObjectBrowser objects={[makeObject({ status: 'deleted' })]} onDelete={vi.fn()} />);
+    expect(within(screen.getByRole('table', { name: 'Files' })).getByText('Deleted')).toHaveClass('text-destructive');
+  });
+
+  it('searches by key', async () => {
+    const user = userEvent.setup();
+    render(<ObjectBrowser objects={[makeObject(), makeObject({ id: 'obj-2', key: 'report.pdf' })]} />);
+    await user.type(screen.getByRole('searchbox', { name: 'Search files' }), 'report');
+    expect(screen.queryByText('photo.png')).not.toBeInTheDocument();
+    expect(screen.getByText('report.pdf')).toBeInTheDocument();
   });
 
   it('offers a share link only for ready objects, and only when sharing is wired up', async () => {
+    const user = userEvent.setup();
     const onShare = vi.fn();
     const objects = [makeObject({ key: 'photo.png' }), makeObject({ id: 'obj-2', key: 'draft.txt', status: 'pending', size: null })];
 
     const { unmount } = render(<ObjectBrowser objects={objects} onDelete={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: /share link/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Actions for photo.png' }));
+    expect(within(await screen.findByRole('menu')).queryByRole('menuitem', { name: /share link/i })).not.toBeInTheDocument();
     unmount();
 
     render(<ObjectBrowser objects={objects} onDelete={vi.fn()} onShare={onShare} />);
-    const shareButtons = screen.getAllByRole('button', { name: /share link/i });
-    expect(shareButtons).toHaveLength(1);
-    await userEvent.click(shareButtons[0]!);
-    expect(onShare).toHaveBeenCalledWith('photo.png');
+    await user.click(screen.getByRole('button', { name: 'Actions for draft.txt' }));
+    expect(within(await screen.findByRole('menu')).queryByRole('menuitem', { name: /share link/i })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Actions for photo.png' }));
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: /share link/i }));
+    await vi.waitFor(() => expect(onShare).toHaveBeenCalledWith('photo.png'));
   });
 });

@@ -2,36 +2,49 @@
 
 import { useAnalyticsGeography } from '@/hooks/use-analytics';
 import type { AnalyticsQueryParams } from '@/lib/types';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ShareTable } from './share-table';
 
-export function GeographyTable({ params }: { params: AnalyticsQueryParams }) {
-  const { data, isLoading } = useAnalyticsGeography(params);
-  if (isLoading) return <Skeleton className="h-48 w-full" />;
-  const countries = data?.countries ?? [];
+let regionNames: Intl.DisplayNames | null | undefined;
+function countryName(code: string): string | null {
+  if (regionNames === undefined) {
+    try {
+      regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    } catch {
+      regionNames = null;
+    }
+  }
+  if (!regionNames || !/^[A-Z]{2}$/.test(code)) return null;
+  try {
+    const name = regionNames.of(code);
+    return name && name !== code ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+export function GeographyTable({ params, limit = 10 }: { params: AnalyticsQueryParams; limit?: number }) {
+  const { data, isLoading, error } = useAnalyticsGeography(params);
+  const countries = [...(data?.countries ?? [])].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-muted-foreground">
-          <th className="pb-2">Country</th>
-          <th className="pb-2">Requests</th>
-        </tr>
-      </thead>
-      <tbody>
-        {countries.map((row) => (
-          <tr key={row.country}>
-            <td className="py-1">{row.country}</td>
-            <td className="py-1">{row.requests.toLocaleString()}</td>
-          </tr>
-        ))}
-        {countries.length === 0 && (
-          <tr>
-            <td colSpan={2} className="py-4 text-muted-foreground">
-              No data for this range.
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
+    <ShareTable
+      labelHeader="Country"
+      loading={isLoading}
+      error={!!error}
+      rows={countries.map((row) => {
+        const name = countryName(row.country);
+        return {
+          key: row.country,
+          requests: row.requests,
+          bytesSent: row.bytesSent,
+          label: (
+            <span className="flex items-center gap-2">
+              <span className="w-7 shrink-0 rounded bg-muted px-1 py-0.5 text-center font-mono text-[11px] font-semibold">{row.country}</span>
+              {name && <span className="truncate">{name}</span>}
+            </span>
+          ),
+        };
+      })}
+    />
   );
 }

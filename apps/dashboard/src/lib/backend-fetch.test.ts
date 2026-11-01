@@ -78,3 +78,27 @@ describe('backendFetch', () => {
     expect(err).toMatchObject({ status: 502, body: { message: 'Unable to reach backend service' } });
   });
 });
+
+describe('backendFetch in demo mode', () => {
+  afterEach(() => {
+    delete process.env.RIVO_DEMO_BACKEND;
+    vi.unstubAllGlobals();
+  });
+
+  it('answers from the in-memory demo backend without touching the network', async () => {
+    process.env.RIVO_DEMO_BACKEND = 'mock';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const tokens = (await backendFetch('http://mock.identity', '/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'owner@demo.rivo', password: 'DemoPass123!' }),
+    })) as { accessToken: string };
+    expect(tokens.accessToken.split('.')).toHaveLength(3);
+
+    await expect(
+      backendFetch('http://mock.cdn', '/api/v1/zones', { accessToken: 'not-a-token' }),
+    ).rejects.toMatchObject({ status: 401, body: { statusCode: 401 } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

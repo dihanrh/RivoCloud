@@ -3,15 +3,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { ErrorBanner } from '@/components/ui/empty-state';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { createOrgSchema } from '@/lib/validation';
+import { useToast } from '@/components/ui/toast';
 import { useCreateOrg } from '@/hooks/use-create-org';
 import { errorMessage } from '@/lib/http';
+import { createOrgSchema } from '@/lib/validation';
 
 export function CreateOrgForm() {
   const router = useRouter();
+  const toast = useToast();
   const [name, setName] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createOrg = useCreateOrg();
 
@@ -19,31 +23,40 @@ export function CreateOrgForm() {
     event.preventDefault();
     setError(null);
 
-    const parsed = createOrgSchema.safeParse({ name });
+    const parsed = createOrgSchema.safeParse({ name: name.trim() });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter an organization name');
+      setNameError('Enter an account name.');
       return;
     }
+    setNameError(null);
 
     try {
       await createOrg.mutateAsync(parsed.data);
       router.push('/dashboard');
     } catch (err) {
-      setError(errorMessage(err, 'Could not create organization'));
+      const message = errorMessage(err, 'Could not create the account. Try again.');
+      setError(message);
+      toast.error('Could not create the account', message);
     }
   }
 
-  const submitting = createOrg.isPending;
-
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="org-name">Organization name</Label>
-        <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} required />
-      </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create organization'}
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+      <Field label="Account name" hint="Usually your company or team. You can invite people afterwards." error={nameError} required>
+        <Input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameError) setNameError(null);
+          }}
+          placeholder="Acme Inc"
+          autoComplete="organization"
+          autoFocus
+        />
+      </Field>
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      <Button type="submit" size="lg" loading={createOrg.isPending} className="w-full">
+        Create account
       </Button>
     </form>
   );

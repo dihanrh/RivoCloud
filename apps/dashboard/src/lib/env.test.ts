@@ -27,4 +27,16 @@ describe('getEnv', () => {
     delete process.env.CDN_SERVICE_URL;
     expect(() => getEnv()).toThrow(/CDN_SERVICE_URL/);
   });
+
+  it('defaults the service URLs in demo mode (RIVO_DEMO_BACKEND=mock)', () => {
+    for (const key of Object.keys(REQUIRED)) delete process.env[key];
+    process.env.RIVO_DEMO_BACKEND = 'mock';
+    expect(getEnv()).toMatchObject({ IDENTITY_SERVICE_URL: 'http://mock.identity', CDN_SERVICE_URL: 'http://mock.cdn' });
+  });
+
+  it('keeps strict validation outside demo mode', () => {
+    delete process.env.RIVO_DEMO_BACKEND;
+    delete process.env.IDENTITY_SERVICE_URL;
+    expect(() => getEnv()).toThrow(/IDENTITY_SERVICE_URL/);
+  });
 });

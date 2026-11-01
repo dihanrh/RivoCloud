@@ -1,60 +1,47 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { useMe } from '@/hooks/use-me';
-import { cn } from '@/lib/utils';
+/**
+ * AppShell — the post-login frame: route progress bar, top bar, sidebar (desktop rail /
+ * mobile drawer), the content column (max 1200px), the command palette, the keyboard
+ * shortcuts dialog and the global hotkeys. Mounted by src/app/(app)/layout.tsx inside
+ * ToastProvider + TooltipProvider.
+ */
+import { CommandPalette } from '@/components/command/command-palette';
+import { DemoBanner } from './demo-banner';
+import { KeyboardShortcutsDialog, useGlobalShortcuts } from './keyboard-shortcuts';
+import { RouteProgress } from './route-progress';
+import { ShellProvider } from './shell-context';
+import { Sidebar } from './sidebar';
+import { TopBar } from './top-bar';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Overview' },
-  { href: '/zones', label: 'Zones' },
-  { href: '/analytics', label: 'Analytics' },
-  { href: '/storage', label: 'Storage' },
-  { href: '/settings', label: 'Settings' },
-];
-
-export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const { data: me } = useMe();
-
-  async function handleLogout() {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } finally {
-      router.push('/login');
-    }
-  }
-
+export function AppShell({ children, initialCollapsed = false }: { children: React.ReactNode; initialCollapsed?: boolean }) {
   return (
-    <div className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-border px-6 py-3">
-        <div className="flex items-center gap-6">
-          <span className="font-semibold">RivoCloud</span>
-          <nav className="flex gap-4">
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'text-sm text-muted-foreground hover:text-foreground',
-                  pathname?.startsWith(item.href) && 'font-medium text-foreground',
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          {me && <span className="text-sm text-muted-foreground">{me.email}</span>}
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            Log out
-          </Button>
-        </div>
-      </header>
-      <main className="px-6 py-8">{children}</main>
+    <ShellProvider initialCollapsed={initialCollapsed}>
+      <ShellFrame>{children}</ShellFrame>
+    </ShellProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
+  useGlobalShortcuts();
+  return (
+    <div className="min-h-screen bg-canvas">
+      <a
+        href="#main-content"
+        className="sr-only z-[90] rounded-md bg-background px-3 py-2 text-[13px] font-medium shadow focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to content
+      </a>
+      <RouteProgress />
+      <TopBar />
+      <div className="flex">
+        <Sidebar />
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto w-full max-w-[1200px]"><DemoBanner />{children}</div>
+        </main>
+      </div>
+      <CommandPalette />
+      <KeyboardShortcutsDialog />
     </div>
   );
 }
