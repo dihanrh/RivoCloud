@@ -1,6 +1,6 @@
 
 # RivoCloud
-
+https://rivo-cloud.vercel.app/_next/image?url=%2Fbrand%2Frivocloud-logo.png&w=384&q=75
 ### An edge-first CDN, object storage, and delivery platform — built from scratch
 
 RivoCloud is a full-stack cloud infrastructure product: a content delivery network (CDN), S3-compatible object storage, cache management, real-time analytics, and billing, unified behind a single dashboard, REST API, SDK, and CLI. It occupies the space between simple CDNs (Bunny.net) and full hyperscale clouds (AWS, Cloudflare) — offering the depth of a serious CDN with the developer experience of a modern platform.
@@ -143,7 +143,6 @@ The platform was delivered as 16 sequenced build stages, each unlocking the next
 15. **SDK & CLI** — first-class developer tooling wrapping the stable REST API
 16. **Public launch** — documentation site, landing page, status page, and onboarding polish
 
-This order wasn't arbitrary: every stage was sequenced so an earlier one supplies something a later one depends on (e.g. cache invalidation couldn't be built before there was both a cache to purge and a zone system to attach rules to).
 
 ---
 
