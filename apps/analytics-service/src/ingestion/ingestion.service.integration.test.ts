@@ -28,7 +28,7 @@ describe('IngestionService (NATS -> ClickHouse)', () => {
   it('ingests a published edge.request event and flushes it on demand', async () => {
     const zoneId = `ingest-test-${Date.now()}`;
     const payload = {
-      timestamp: '2026-06-29T10:00:00.000Z', zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
+      timestamp: new Date().toISOString(), zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
       method: 'GET', path: '/x', status_code: 200, cache_status: 'HIT',
       bytes_sent: 500, duration_ms: 3, country: 'FR', client_ip_hash: 'hash2',
     };

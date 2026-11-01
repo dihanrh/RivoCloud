@@ -32,6 +32,17 @@ async function clearRateLimitKeys(redis: Redis): Promise<void> {
   } while (cursor !== '0');
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+// The fixture day is yesterday (UTC): request_logs has a 90-day TTL, so a
+// hard-coded date eventually expires and ClickHouse drops the inserted rows.
+const MIDNIGHT_UTC = Math.floor(Date.now() / DAY_MS) * DAY_MS - DAY_MS;
+const TEN_AM_UTC = MIDNIGHT_UTC + 10 * 60 * 60 * 1000;
+
+/** `YYYY-MM-DD HH:MM:SS.mmm` in UTC, the DateTime64(3, 'UTC') text format. */
+function chDateTime(ms: number): string {
+  return new Date(ms).toISOString().replace('T', ' ').replace('Z', '');
+}
+
 describe('AnalyticsController', () => {
   let redis: Redis;
   let app: INestApplication;
@@ -74,7 +85,7 @@ describe('AnalyticsController', () => {
     zoneId = zone.id;
     fakeIdentity.nextAuth = { type: 'jwt', userId: 'u1', orgId, role: 'owner' };
 
-    const now = '2026-06-29 10:00:00.000';
+    const now = chDateTime(TEN_AM_UTC);
     await ch.insert({
       table: 'request_logs',
       values: [
@@ -85,12 +96,12 @@ describe('AnalyticsController', () => {
     });
     await ch.insert({
       table: 'bandwidth_hourly',
-      values: [{ hour: '2026-06-29 10:00:00', zone_id: zoneId, org_id: orgId, bytes_sent: 150, requests: 2, cache_hits: 1, cache_misses: 1 }],
+      values: [{ hour: chDateTime(TEN_AM_UTC).slice(0, 19), zone_id: zoneId, org_id: orgId, bytes_sent: 150, requests: 2, cache_hits: 1, cache_misses: 1 }],
       format: 'JSONEachRow',
     });
     await ch.insert({
       table: 'requests_by_country_daily',
-      values: [{ date: '2026-06-29', zone_id: zoneId, country: 'DE', requests: 1, bytes_sent: 100 }],
+      values: [{ date: chDateTime(MIDNIGHT_UTC).slice(0, 10), zone_id: zoneId, country: 'DE', requests: 1, bytes_sent: 100 }],
       format: 'JSONEachRow',
     });
   });
@@ -99,7 +110,7 @@ describe('AnalyticsController', () => {
   // instances (`.get`/`.post`/...), not an object with `.set` of its own —
   // so the header must be attached after choosing the verb+path, not before.
   const authed = (path: string) => request(app.getHttpServer()).get(path).set('Authorization', 'Bearer test-token');
-  const rangeQs = 'from=2026-06-29T00:00:00Z&to=2026-06-30T00:00:00Z';
+  const rangeQs = `from=${new Date(MIDNIGHT_UTC).toISOString()}&to=${new Date(MIDNIGHT_UTC + DAY_MS).toISOString()}`;
 
   it('overview returns totals scoped to the org\'s zones', async () => {
     const response = await authed(`/api/v1/analytics/overview?${rangeQs}`);
@@ -110,10 +121,8 @@ describe('AnalyticsController', () => {
   // Buckets are epoch-milliseconds in UTC (unambiguous for the browser's
   // `new Date(...)`), and every numeric field is a real JSON number — not
   // ClickHouse's default quoted-string rendering of UInt64.
-  const TEN_AM_UTC = Date.UTC(2026, 5, 29, 10);
-  const MIDNIGHT_UTC = Date.UTC(2026, 5, 29);
-  // toStartOfWeek's default mode starts weeks on Sunday: 2026-06-28.
-  const WEEK_START_UTC = Date.UTC(2026, 5, 28);
+  // toStartOfWeek's default mode starts weeks on Sunday.
+  const WEEK_START_UTC = MIDNIGHT_UTC - new Date(MIDNIGHT_UTC).getUTCDay() * DAY_MS;
 
   it('bandwidth reads from the pre-computed rollup table', async () => {
     const response = await authed(`/api/v1/analytics/bandwidth?${rangeQs}`);

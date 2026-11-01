@@ -27,7 +27,7 @@ describe('RequestLogWriter', () => {
     const zoneId = `test-zone-${Date.now()}`;
     await writer.insertBatch([
       {
-        timestamp: '2026-06-29T10:00:00.000Z', zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
+        timestamp: new Date().toISOString(), zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
         method: 'GET', path: '/x', status_code: 200, cache_status: 'HIT',
         bytes_sent: 1234, duration_ms: 7, country: 'DE', client_ip_hash: 'hash1',
       },

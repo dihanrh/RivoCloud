@@ -35,7 +35,7 @@ describe('EventsInternalController', () => {
       .send({
         events: [
           {
-            timestamp: '2026-06-29T10:00:00.000Z', zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
+            timestamp: new Date().toISOString(), zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
             method: 'GET', path: '/x', status_code: 200, cache_status: 'HIT',
             bytes_sent: 42, duration_ms: 1, country: 'DE', client_ip_hash: 'hash3',
           },
@@ -56,7 +56,7 @@ describe('EventsInternalController', () => {
   it.each(['USA', 'D', '1A', 'ÄÖ'])('rejects a batch containing a malformed country %j with a 400 and writes nothing', async (country) => {
     const zoneId = `internal-bad-country-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const baseEvent = {
-      timestamp: '2026-06-29T10:00:00.000Z', zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
+      timestamp: new Date().toISOString(), zone_id: zoneId, org_id: 'org1', datacenter: 'dc1',
       method: 'GET', path: '/x', status_code: 200, cache_status: 'HIT',
       bytes_sent: 42, duration_ms: 1, client_ip_hash: 'hash3',
     };
@@ -81,7 +81,7 @@ describe('EventsInternalController', () => {
       .set('X-Internal-Secret', process.env.INTERNAL_API_SECRET ?? 'test_internal_secret_at_least_16_chars')
       .send({
         events: {
-          timestamp: '2026-06-29T10:00:00.000Z', zone_id: 'z1', org_id: 'org1', datacenter: 'dc1',
+          timestamp: new Date().toISOString(), zone_id: 'z1', org_id: 'org1', datacenter: 'dc1',
           method: 'GET', path: '/x', status_code: 200, cache_status: 'HIT',
           bytes_sent: 42, duration_ms: 1, country: 'DE', client_ip_hash: 'hash3',
         },
