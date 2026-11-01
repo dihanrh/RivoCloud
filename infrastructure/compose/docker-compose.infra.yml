@@ -54,7 +54,10 @@ services:
     networks: [rivocloud]
 
   minio:
-    image: minio/minio:latest
+    # minio/minio was withdrawn from Docker Hub. Chainguard's build defaults to a
+    # non-root user that cannot write the data volume, and ships no curl.
+    image: cgr.dev/chainguard/minio:latest
+    user: "0:0"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: rivocloud
@@ -68,7 +71,7 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
       retries: 10
