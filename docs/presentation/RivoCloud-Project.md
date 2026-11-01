@@ -4,8 +4,6 @@
 
 RivoCloud is a full-stack cloud infrastructure product: a content delivery network (CDN), S3-compatible object storage, cache management, real-time analytics, and billing, unified behind a single dashboard, REST API, SDK, and CLI. It occupies the space between simple CDNs (Bunny.net) and full hyperscale clouds (AWS, Cloudflare) — offering the depth of a serious CDN with the developer experience of a modern platform.
 
-This document is a portfolio-facing summary of the completed project: what it does, how it's built, the stack behind it, how it ships, and the problems it solves in practice.
-
 ---
 
 ## 1. Overview & Features
@@ -283,9 +281,7 @@ sequenceDiagram
 
 ## Project Links
 
-- **GitHub Repository:** _[add link]_
-- **Live Demo / Dashboard:** _[add link]_
-- **Documentation Site:** _[add link]_
+- **Live Demo / Dashboard:** _[[rivo-cloud.vercel.app](https://rivo-cloud.vercel.app/)]_
 
 ---
 
