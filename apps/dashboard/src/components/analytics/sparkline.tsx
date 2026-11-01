@@ -27,12 +27,12 @@ export function Sparkline({
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={className} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       <defs>
         <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+          <stop offset="0%" stopColor={color} stopOpacity={0.22} />
           <stop offset="100%" stopColor={color} stopOpacity={0} />
         </linearGradient>
       </defs>
       <path d={area} fill={`url(#${gradientId})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+      <path d={line} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
 }

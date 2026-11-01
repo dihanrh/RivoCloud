@@ -26,22 +26,26 @@ export function KpiTile({
   className?: string;
 }) {
   return (
-    <Card className={cn('flex flex-col gap-3 p-4', className)}>
-      <div className="flex items-center justify-between gap-2">
+    <Card className={cn('flex flex-col gap-3 p-4 transition-shadow duration-150 hover:shadow-[0_4px_16px_-8px_rgba(29,32,37,0.18)]', className)}>
+      <div className="flex items-center gap-2">
+        {Icon && (
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary-soft text-primary" aria-hidden>
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+        )}
         <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground" aria-hidden />}
       </div>
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           {loading ? (
             <Skeleton className="h-7 w-24" />
           ) : (
-            <p className="truncate text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+            <p className="truncate text-[26px] font-semibold leading-tight tracking-tight">{value}</p>
           )}
           {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
         </div>
         {trend !== undefined &&
-          (loading ? <Skeleton className="h-8 w-24 shrink-0" /> : <Sparkline values={trend} className="h-8 w-24 shrink-0" />)}
+          (loading ? <Skeleton className="h-10 w-28 shrink-0" /> : <Sparkline values={trend} className="h-10 w-28 shrink-0" />)}
       </div>
     </Card>
   );

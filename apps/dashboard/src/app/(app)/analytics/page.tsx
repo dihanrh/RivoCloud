@@ -33,13 +33,16 @@ export default function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title="Analytics" description="Traffic served from the edge across your websites. Pick a website to focus on one." />
-      <div className="mb-4 flex flex-col gap-2 rounded-[var(--radius)] border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
-        <AnalyticsFilters params={params} onChange={setParams} />
-        <p className="text-[13px] text-muted-foreground" aria-live="polite">
-          {zoneName ?? 'All websites'} · {range}
-        </p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        description={
+          <span aria-live="polite">
+            Traffic served from the edge for <span className="font-medium text-foreground">{zoneName ?? 'all websites'}</span> ·{' '}
+            {range}
+          </span>
+        }
+        actions={<AnalyticsFilters params={params} onChange={setParams} />}
+      />
       <div className="flex flex-col gap-4">
         <AnalyticsKpis params={params} hint={range} />
         {noTraffic ? (
@@ -53,16 +56,16 @@ export default function AnalyticsPage() {
         ) : (
           <>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <ChartCard title="Bandwidth" description="Bytes sent to visitors" className="lg:col-span-2">
+            <ChartCard title="Traffic" description="Bandwidth and requests served to visitors" className="lg:col-span-2">
               <BandwidthChart params={params} />
             </ChartCard>
-            <ChartCard title="Cache hit ratio" description="Share of requests served from cache">
+            <ChartCard title="Cache performance" description="How each request was answered">
               <CacheRatioGauge params={params} />
             </ChartCard>
-            <ChartCard title="Latency" description="p50, p95 and p99 time to first byte" className="lg:col-span-2">
+            <ChartCard title="Latency" description="Time to first byte at the p50, p95 and p99 percentiles" className="lg:col-span-2">
               <LatencyChart params={params} />
             </ChartCard>
-            <ChartCard title="Status codes" description="Responses by HTTP status">
+            <ChartCard title="Status codes" description="Responses by HTTP status class">
               <StatusCodeChart params={params} />
             </ChartCard>
           </div>

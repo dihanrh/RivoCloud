@@ -20,10 +20,10 @@ export function ChartCard({
 }) {
   return (
     <Card className={cn('flex min-w-0 flex-col overflow-hidden', className)}>
-      <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
+      <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          {description && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{description}</p>}
         </div>
         {action}
       </div>

@@ -34,10 +34,10 @@ export function ShareTable({
     <Table aria-busy={loading || undefined}>
       <TableHeader>
         <TableRow>
-          <TableHead>{labelHeader}</TableHead>
+          <TableHead className="w-[42%]">{labelHeader}</TableHead>
           <TableHead className="text-right">Requests</TableHead>
           {showBytes && <TableHead className="hidden text-right sm:table-cell">Bandwidth</TableHead>}
-          <TableHead className="w-[32%]">Share</TableHead>
+          <TableHead className="w-[26%]">Share</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -52,19 +52,24 @@ export function ShareTable({
             </TableRow>
           ))}
         {!loading &&
-          rows.map((row) => {
+          rows.map((row, index) => {
             const share = total ? row.requests / total : 0;
             return (
               <TableRow key={row.key}>
-                <TableCell className="max-w-0 truncate">{row.label}</TableCell>
+                <TableCell className="max-w-0">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="w-4 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+                    <div className="min-w-0 flex-1 truncate">{row.label}</div>
+                  </div>
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{formatNumber(row.requests)}</TableCell>
                 {showBytes && (
                   <TableCell className="hidden text-right tabular-nums text-muted-foreground sm:table-cell">{formatBytes(row.bytesSent ?? 0)}</TableCell>
                 )}
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${max ? (row.requests / max) * 100 : 0}%` }} />
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#f1f2f5]" aria-hidden>
+                      <div className="h-full rounded-full bg-primary/85" style={{ width: `${max ? (row.requests / max) * 100 : 0}%` }} />
                     </div>
                     <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">{formatPercent(share)}</span>
                   </div>

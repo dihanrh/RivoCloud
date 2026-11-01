@@ -40,7 +40,7 @@ export function GeographyTable({ params, limit = 10 }: { params: AnalyticsQueryP
           label: (
             <span className="flex items-center gap-2">
               <span className="w-7 shrink-0 rounded bg-muted px-1 py-0.5 text-center font-mono text-[11px] font-semibold">{row.country}</span>
-              {name && <span className="truncate">{name}</span>}
+              {name && <span className="min-w-0 truncate">{name}</span>}
             </span>
           ),
         };
