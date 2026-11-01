@@ -79,7 +79,7 @@ export function SiteFooter() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-40" aria-hidden />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-success" aria-hidden />
               </span>
-              All systems operational
+              All systems is on Demo
             </a>
           </div>
           <nav aria-label="Footer" className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5">
