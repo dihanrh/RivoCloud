@@ -74,6 +74,9 @@ export function SiteHeader() {
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm" className="hidden h-9 px-3.5 text-sm sm:inline-flex">
+            <Link href="/login?demo=1">Demo Login</Link>
+          </Button>
           <Button asChild variant="outline" size="sm" className="hidden h-9 px-3.5 text-sm sm:inline-flex">
             <Link href="/login">Log in</Link>
           </Button>
@@ -110,7 +113,10 @@ export function SiteHeader() {
               </a>
             </li>
           ))}
-          <li className="mt-2 border-t border-border pt-3 sm:hidden">
+          <li className="mt-2 grid gap-2 border-t border-border pt-3 sm:hidden">
+            <Button asChild variant="secondary" className="h-10 w-full text-[15px]">
+              <Link href="/login?demo=1">Demo Login</Link>
+            </Button>
             <Button asChild variant="outline" className="h-10 w-full text-[15px]">
               <Link href="/login">Log in</Link>
             </Button>

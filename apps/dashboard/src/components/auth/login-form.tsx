@@ -23,10 +23,13 @@ type Field = 'email' | 'password';
 export function LoginForm({
   onSuccess,
   afterForm,
+  showDemoAccounts = false,
 }: {
   onSuccess: (result: LoginResult) => void;
   /** Rendered between the form and the demo panel (e.g. the link to sign up). */
   afterForm?: React.ReactNode;
+  /** Show the demo accounts quick-fill panel (the "Demo Login" entry). */
+  showDemoAccounts?: boolean;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -132,15 +135,17 @@ export function LoginForm({
 
       {afterForm}
 
-      <DemoAccounts
-        onPick={(demoEmail, demoPassword) => {
-          setEmail(demoEmail);
-          setPassword(demoPassword);
-          setErrors({});
-          setServerError(null);
-          passwordRef.current?.focus();
-        }}
-      />
+      {showDemoAccounts && (
+        <DemoAccounts
+          onPick={(demoEmail, demoPassword) => {
+            setEmail(demoEmail);
+            setPassword(demoPassword);
+            setErrors({});
+            setServerError(null);
+            passwordRef.current?.focus();
+          }}
+        />
+      )}
     </>
   );
 }

@@ -11,17 +11,11 @@ export const DEMO_ACCOUNTS = [
   { email: 'viewer@demo.rivo', role: 'Viewer' },
 ] as const;
 
-/** Read at render so tests can stub it; Next inlines NEXT_PUBLIC_* at build time. */
-export function isDemoMode() {
-  return process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
-}
-
 /**
- * Quick-fill list of the seeded demo users. Only rendered when
- * NEXT_PUBLIC_DEMO_MODE=true. Clicking fills the form; it never submits.
+ * Quick-fill list of the seeded demo users. Shown only on the "Demo Login"
+ * entry (/login?demo=1), never on the plain login page. Clicking fills the form; it never submits.
  */
 export function DemoAccounts({ onPick }: { onPick: (email: string, password: string) => void }) {
-  if (!isDemoMode()) return null;
   return (
     <section aria-labelledby="demo-accounts-title" className="rounded-xl border border-dashed border-border-strong bg-muted/60 p-3.5">
       <div className="flex items-center gap-2">

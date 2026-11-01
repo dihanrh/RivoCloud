@@ -68,6 +68,31 @@
     color: inherit;
   }
 
+  /* Tailwind's preflight leaves buttons with the arrow cursor; every clickable control gets the hand. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='menuitem']:not([data-disabled]),
+  [role='menuitemcheckbox']:not([data-disabled]),
+  [role='menuitemradio']:not([data-disabled]),
+  [role='option']:not([data-disabled]),
+  [role='tab']:not(:disabled),
+  [role='switch']:not(:disabled),
+  [role='checkbox']:not(:disabled),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='submit']:not(:disabled),
+  input[type='button']:not(:disabled),
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -83,6 +108,14 @@
  * tooltips and toasts. Radix primitives expose data-state / data-side, which
  * these classes key off. The reduced-motion rule above collapses all of it.
  */
+/* The home page "Take a tour" button blinks with an expanding brand-coloured ring. */
+@keyframes rc-attention {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(214, 36, 106, 0.55); filter: brightness(1); }
+  50% { box-shadow: 0 0 0 10px rgba(214, 36, 106, 0); filter: brightness(1.12); }
+}
+.rc-attention { animation: rc-attention 1.6s ease-in-out infinite; }
+.rc-attention:hover, .rc-attention:focus-visible { animation-play-state: paused; }
+
 @keyframes rc-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rc-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes rc-pop-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }

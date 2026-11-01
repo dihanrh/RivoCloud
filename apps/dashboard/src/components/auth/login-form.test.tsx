@@ -102,17 +102,15 @@ describe('LoginForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach RivoCloud right now.");
   });
 
-  it('hides the demo accounts panel unless NEXT_PUBLIC_DEMO_MODE is true', () => {
-    vi.stubEnv('NEXT_PUBLIC_DEMO_MODE', '');
+  it('hides the demo accounts panel on the plain login page', () => {
     render(<LoginForm onSuccess={vi.fn()} />);
     expect(screen.queryByText('Demo accounts')).not.toBeInTheDocument();
   });
 
-  it('fills (but does not submit) the form from a demo account in demo mode', async () => {
-    vi.stubEnv('NEXT_PUBLIC_DEMO_MODE', 'true');
+  it('fills (but does not submit) the form from a demo account on the demo login', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    render(<LoginForm onSuccess={vi.fn()} />);
+    render(<LoginForm onSuccess={vi.fn()} showDemoAccounts />);
 
     expect(screen.getByText('Demo accounts')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /admin demo account/i }));
