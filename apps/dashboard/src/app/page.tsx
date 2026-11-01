@@ -11,7 +11,7 @@ import { Developers } from '@/components/marketing/developers';
 import { Performance } from '@/components/marketing/performance';
 import { Testimonials } from '@/components/marketing/testimonials';
 import { Faq } from '@/components/marketing/faq';
-import { Contact } from '@/components/marketing/contact';
+import { NetworkMetrics } from '@/components/marketing/network-metrics';
 import { SiteFooter } from '@/components/marketing/site-footer';
 import { GuidedTour } from '@/components/marketing/tour/guided-tour';
 
@@ -76,9 +76,9 @@ export default function LandingPage() {
               title="Questions, answered"
               lede={
                 <>
-                  Something else on your mind?{' '}
-                  <a href="#contact" className="font-medium text-primary underline-offset-4 hover:underline">
-                    Ask our team
+                  Want to see it for yourself?{' '}
+                  <a href="/login?demo=1" className="font-medium text-primary underline-offset-4 hover:underline">
+                    Try the demo console
                   </a>
                   .
                 </>
@@ -88,7 +88,7 @@ export default function LandingPage() {
           </Container>
         </section>
 
-        <Contact />
+        <NetworkMetrics />
       </main>
       <SiteFooter />
       <GuidedTour />

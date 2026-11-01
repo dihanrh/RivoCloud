@@ -29,7 +29,7 @@ const COLUMNS = [
       ['About', '#'],
       ['Customers', '#use-cases'],
       ['Careers', '#'],
-      ['Contact sales', '#contact'],
+      ['Network metrics', '#metrics'],
     ],
   },
   {
